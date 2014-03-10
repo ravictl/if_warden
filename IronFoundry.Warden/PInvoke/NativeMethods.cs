@@ -3,7 +3,7 @@
     using System.Security;
 
     [SuppressUnmanagedCodeSecurity]
-    internal partial class NativeMethods
+    public partial class NativeMethods
     {
     }
 }

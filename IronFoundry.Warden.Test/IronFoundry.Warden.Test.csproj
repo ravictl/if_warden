@@ -36,17 +36,32 @@
   <ItemGroup>
     <Compile Include="ContainerHandleTests.cs" />
     <Compile Include="TestSupport\FactAdminRequired.cs" />
+    <Compile Include="ContainerHost\MessageDispatcherTest.cs" />
+    <Compile Include="ExternalProcessContainersTest.cs" />
+    <Compile Include="JobObjectTests.cs" />
     <Compile Include="LocalPrincipalManagerTests.cs" />
     <Compile Include="ProcessManagerTests.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
   </ItemGroup>
   <ItemGroup>
+    <ProjectReference Include="..\IronFoundry.Warden.ContainerHost\IronFoundry.Warden.ContainerHost.csproj">
+      <Project>{586784cf-de8a-411f-ad99-18f00dc2a75b}</Project>
+      <Name>IronFoundry.Warden.ContainerHost</Name>
+    </ProjectReference>
+    <ProjectReference Include="..\IronFoundry.Warden.Shared\IronFoundry.Warden.Shared.csproj">
+      <Project>{cb7ba555-21fd-4c57-a629-a925b6a83a31}</Project>
+      <Name>IronFoundry.Warden.Shared</Name>
+    </ProjectReference>
     <ProjectReference Include="..\IronFoundry.Warden\IronFoundry.Warden.csproj">
       <Project>{cc1c255a-a120-4d7f-b40f-c4cb3cdb193b}</Project>
       <Name>IronFoundry.Warden</Name>
     </ProjectReference>
   </ItemGroup>
   <ItemGroup>
+    <Reference Include="Newtonsoft.Json, Version=6.0.0.0, Culture=neutral, PublicKeyToken=30ad4fe6b2a6aeed, processorArchitecture=MSIL">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>..\packages\Newtonsoft.Json.6.0.1\lib\net45\Newtonsoft.Json.dll</HintPath>
+    </Reference>
     <Reference Include="NLog, Version=2.1.0.0, Culture=neutral, PublicKeyToken=5120e14c03d0593c, processorArchitecture=MSIL">
       <SpecificVersion>False</SpecificVersion>
       <HintPath>..\packages\NLog.2.1.0\lib\net45\NLog.dll</HintPath>

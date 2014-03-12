@@ -1,27 +1,8 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Diagnostics;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
+﻿using System.Diagnostics;
 
 namespace IronFoundry.Warden.Shared.Messaging
 {
-    public class CreateProcessMessage : JsonRpcRequest<CreateProcessParams>
-    {
-        public CreateProcessMessage() 
-            : base("CreateProcess")
-        {
-        }
-
-        public CreateProcessMessage(ProcessStartInfo startInfo)
-            : base("CreateProcess")
-        {
-            @params = new CreateProcessParams(startInfo);
-        }
-    }
-
-    public class CreateProcessParams 
+    public class CreateProcessParams
     {
         public CreateProcessParams()
         {
@@ -38,13 +19,43 @@ namespace IronFoundry.Warden.Shared.Messaging
 
         public ProcessStartInfo ToProcessStartInfo()
         {
-            return new ProcessStartInfo() 
-            { 
+            return new ProcessStartInfo()
+            {
                 UseShellExecute = false,
                 CreateNoWindow = true,
-                FileName = this.FileName, 
-                Arguments = this.Arguments 
+                FileName = this.FileName,
+                Arguments = this.Arguments,
             };
+        }
+    }
+
+    public class CreateProcessRequest : JsonRpcRequest<CreateProcessParams>
+    {
+        public CreateProcessRequest() 
+            : base("CreateProcess")
+        {
+        }
+
+        public CreateProcessRequest(ProcessStartInfo startInfo)
+            : base("CreateProcess")
+        {
+            @params = new CreateProcessParams(startInfo);
+        }
+    }
+    
+    public class CreateProcessResult
+    {
+        public int Id { get; set; }
+    }
+
+    public class CreateProcessResponse : JsonRpcResponse<CreateProcessResult>
+    {
+        public CreateProcessResponse() : base()
+        {
+        }
+
+        public CreateProcessResponse(string id, CreateProcessResult result) : base(id, result)
+        {
         }
     }
 }

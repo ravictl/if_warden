@@ -1,13 +1,9 @@
-﻿using IronFoundry.Warden.Shared.Messaging;
-using Newtonsoft.Json;
-using Newtonsoft.Json.Linq;
-using System;
-using System.Collections.Generic;
+﻿using System;
 using System.Diagnostics;
 using System.IO;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
+using IronFoundry.Warden.Shared.Messaging;
+using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
 
 namespace IronFoundry.Warden.Containers
 {
@@ -16,7 +12,7 @@ namespace IronFoundry.Warden.Containers
         string hostExe = "IronFoundry.Warden.ContainerHost.exe";
         Process hostProcess;
 
-        public Process LaunchProcess(System.Diagnostics.ProcessStartInfo si, JobObject jobObject)
+        public Process LaunchProcess(ProcessStartInfo si, JobObject jobObject)
         {
             if (hostProcess == null)
             {
@@ -32,19 +28,29 @@ namespace IronFoundry.Warden.Containers
                 jobObject.AssignProcessToJob(hostProcess);
             }
 
-            Process p = RequestStartProcess(si);
-
-            return p;
+            return RequestStartProcess(si);
         }
 
         private Process RequestStartProcess(ProcessStartInfo si)
         {
-
-            var msg = new CreateProcessMessage(si);
+            var msg = new CreateProcessRequest(si);
 
             var jsonMessage = JsonConvert.SerializeObject(msg, Formatting.None);
             hostProcess.StandardInput.WriteLine(jsonMessage);
 
+            var response = GetResponse<CreateProcessResponse>();
+            return Process.GetProcessById(response.result.Id);
+        }
+
+        private JObject GetResponse()
+        {
+            var response = hostProcess.StandardOutput.ReadLine();
+            return JObject.Parse(response);
+        }
+
+        private T GetResponse<T>()
+            where T : JsonRpcResponse, new()
+        {
             var response = GetResponse();
 
             var error = response["error"];
@@ -53,15 +59,7 @@ namespace IronFoundry.Warden.Containers
                 throw new ProcessLauncherException(error["message"].ToString()) { Code = (int)error["code"], RemoteData = error["data"].ToString() };
             }
 
-            int processId = (int)response["result"];
-            return Process.GetProcessById(processId);
-
-        }
-
-        private JObject GetResponse()
-        {
-            var response = hostProcess.StandardOutput.ReadLine();
-            return JObject.Parse(response);
+            return response.ToObject<T>();
         }
     }
 

@@ -36,7 +36,7 @@
         {
             ProcessStartInfo si = new ProcessStartInfo("cmd.exe");
 
-            using (Process p = launcher.LaunchProcess(si, jobObject))
+            using (var p = launcher.LaunchProcess(si, jobObject))
             {
                 bool isInJob = false;
 
@@ -52,7 +52,7 @@
 
             ProcessStartInfo si = new ProcessStartInfo("cmd.exe", string.Format(@"/K echo Boomerang > {0}", tempFile));
 
-            using (Process p = launcher.LaunchProcess(si, jobObject))
+            using (var p = launcher.LaunchProcess(si, jobObject))
             {
                 var output = File.ReadAllText(tempFile);
                 Assert.Contains("Boomerang", output);
@@ -92,7 +92,24 @@
 
         // Can start process as specific user        
         // Can send stdinput to remote process
-        // Can get stdouput from remote process
+        
+        //[Fact]
+        //public void CanGetStdoutFromRemoteProcess()
+        //{
+        //    ProcessStartInfo si = new ProcessStartInfo("cmd.exe", @"/K echo Boomerang")
+        //    {
+        //        RedirectStandardOutput = true,
+        //    };
+
+        //    using (var p = launcher.LaunchProcess(si, jobObject))
+        //    {
+        //        StringBuilder builder = new StringBuilder();
+                
+        //        var output = p.StandardOutput.ReadLine();
+        //        Assert.Contains("Boomerang", output);
+        //    }
+        //}
+
         // Can get errorinfo from remote process
     }
 }

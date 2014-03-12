@@ -15,12 +15,11 @@ namespace IronFoundry.Warden.ContainerHost
         static void Main(string[] args)
         {
             MessageDispatcher dispatcher = new MessageDispatcher();
-            dispatcher.RegisterMethod<CreateProcessMessage>("CreateProcess", CreateProcessHandler);
+            dispatcher.RegisterMethod<CreateProcessRequest>("CreateProcess", CreateProcessHandler);
 
             bool exit = false;
             while (!exit)
             {
-                
                 string request = Console.ReadLine();
                 if (request == null) { continue; }
 
@@ -29,13 +28,18 @@ namespace IronFoundry.Warden.ContainerHost
             }
         }
 
-        private static object CreateProcessHandler(CreateProcessMessage request)
+        private static object CreateProcessHandler(CreateProcessRequest request)
         {
-            
+            Debug.Assert(false);
+
             var createParams = request.@params;
             Process process = Process.Start(createParams.ToProcessStartInfo());
-
-            return process.Id;
+            return new CreateProcessResponse(
+                request.id, 
+                new CreateProcessResult
+                {
+                    Id = process.Id,
+                });
         }
     }
 }

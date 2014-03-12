@@ -1,45 +1,55 @@
-﻿using IronFoundry.Warden.Shared.Messaging;
+﻿using System;
+using System.Diagnostics;
+using System.Threading;
+using System.Threading.Tasks;
+using IronFoundry.Warden.Shared.Messaging;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
-using System;
-using System.Collections.Generic;
-using System.Diagnostics;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 
 namespace IronFoundry.Warden.ContainerHost
 {
     class Program
     {
+        static ManualResetEvent exitEvent = new ManualResetEvent(false);
+
         static void Main(string[] args)
         {
-            MessageDispatcher dispatcher = new MessageDispatcher();
+            var task = MainAsync(args);
+            task.GetAwaiter().GetResult();
+        }
+
+        static async Task MainAsync(string[] args)
+        {
+            var input = Console.In;
+            var output = Console.Out;
+            var dispatcher = new MessageDispatcher();
             dispatcher.RegisterMethod<CreateProcessRequest>("CreateProcess", CreateProcessHandler);
 
-            bool exit = false;
-            while (!exit)
+            while (!exitEvent.WaitOne(0))
             {
-                string request = Console.ReadLine();
-                if (request == null) { continue; }
+                string request = await input.ReadLineAsync();
+                if (String.IsNullOrWhiteSpace(request))
+                    continue;
 
-                var response = dispatcher.Dispatch(JObject.Parse(request));
-                System.Console.WriteLine(response.ToString(Formatting.None));
+                var response = await dispatcher.DispatchAsync(JObject.Parse(request));
+
+                await output.WriteLineAsync(response.ToString(Formatting.None));
             }
         }
 
-        private static object CreateProcessHandler(CreateProcessRequest request)
+        private static Task<object> CreateProcessHandler(CreateProcessRequest request)
         {
-            Debug.Assert(false);
+            //Debug.Assert(false);
 
             var createParams = request.@params;
             Process process = Process.Start(createParams.ToProcessStartInfo());
-            return new CreateProcessResponse(
-                request.id, 
-                new CreateProcessResult
-                {
-                    Id = process.Id,
-                });
+            return Task.FromResult<object>(
+                new CreateProcessResponse(
+                    request.id,
+                    new CreateProcessResult
+                    {
+                        Id = process.Id,
+                    }));
         }
     }
 }

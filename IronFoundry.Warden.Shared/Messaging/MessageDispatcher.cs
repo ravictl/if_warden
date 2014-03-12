@@ -1,28 +1,25 @@
-﻿using IronFoundry.Warden.Shared.Messaging;
-using Newtonsoft.Json;
-using Newtonsoft.Json.Linq;
-using System;
+﻿using System;
 using System.Collections.Generic;
-using System.Linq;
-using System.Text;
 using System.Threading.Tasks;
+using IronFoundry.Warden.Shared.Messaging;
+using Newtonsoft.Json.Linq;
 
-namespace IronFoundry.Warden.ContainerHost
+namespace IronFoundry.Warden.Shared.Messaging
 {
     public class MessageDispatcher
     {
-        Dictionary<string, Func<JObject, object>> methods = new Dictionary<string, Func<JObject, object>>(StringComparer.OrdinalIgnoreCase);
+        Dictionary<string, Func<JObject, Task<object>>> methods = new Dictionary<string, Func<JObject, Task<object>>>(StringComparer.OrdinalIgnoreCase);
 
-        public JObject Dispatch(JObject request)
+        public async Task<JObject> DispatchAsync(JObject request)
         {
             var method = (string)request["method"];
 
-            Func<JObject, object> callback;
+            Func<JObject, Task<object>> callback;
             if (methods.TryGetValue(method, out callback))
             {
                 try
                 {
-                    var result = callback(request);
+                    var result = await callback(request);
 
                     if (result is JsonRpcResponse)
                     {
@@ -67,12 +64,12 @@ namespace IronFoundry.Warden.ContainerHost
             return ErrorResponse(request["id"], -32601, String.Format("The method '{0}' does not exist.", methodName));
         }
 
-        public void RegisterMethod(string methodName, Func<JObject, object> callback)
+        public void RegisterMethod(string methodName, Func<JObject, Task<object>> callback)
         {
             methods.Add(methodName, callback);
         }
 
-        public void RegisterMethod<T>(string methodName, Func<T, object> callback)
+        public void RegisterMethod<T>(string methodName, Func<T, Task<object>> callback)
             where T: JsonRpcRequest
         {
             methods.Add(methodName, (r) => 

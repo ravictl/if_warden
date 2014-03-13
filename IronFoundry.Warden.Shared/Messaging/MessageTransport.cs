@@ -1,25 +1,22 @@
-﻿using Newtonsoft.Json;
-using Newtonsoft.Json.Linq;
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
-using System.Linq;
-using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
+using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
 
 namespace IronFoundry.Warden.Shared.Messaging
 {
-    public class MessageTransport
+    public class MessageTransport : IDisposable
     {
         private TextReader reader;
         private TextWriter writer;
-        private List<Action<JObject>> requestCallbacks = new List<Action<JObject>>();
-        private List<Action<JObject>> responseCallbacks = new List<Action<JObject>>();
+        private List<Func<JObject, Task>> requestCallbacks = new List<Func<JObject, Task>>();
+        private List<Func<JObject, Task>> responseCallbacks = new List<Func<JObject, Task>>();
         private List<Action<Exception>> errorSubscribers = new List<Action<Exception>>();
         private CancellationTokenSource tokenSource = new CancellationTokenSource();
-        private CancellationToken token;
-        private Task readTask;
+        private volatile Task readTask;
 
         public MessageTransport(TextReader reader, TextWriter writer)
         {
@@ -29,18 +26,30 @@ namespace IronFoundry.Warden.Shared.Messaging
             Start();
         }
 
-        public Task HandleLine(Task<string> readTask)
+        public void Dispose()
         {
-            if (!string.IsNullOrEmpty(readTask.Result))
-                InvokeCallback(readTask.Result);
-
-            if (token.IsCancellationRequested)
-                token.ThrowIfCancellationRequested();
-
-            return ReadAsync();
+            Stop();
         }
 
-        private void InvokeCallback(string stringMessage)
+        private async Task ReadLineAsync(CancellationToken token)
+        {
+            while (!token.IsCancellationRequested)
+            {
+                string line = await reader.ReadLineAsync();
+                if (token.IsCancellationRequested)
+                    return;
+
+                if (line == null)
+                    return;
+
+                await InvokeCallbackAsync(line);
+
+                if (token.IsCancellationRequested)
+                    return;
+            }
+        }
+
+        private async Task InvokeCallbackAsync(string stringMessage)
         {
             JObject message = null;
             try
@@ -50,12 +59,13 @@ namespace IronFoundry.Warden.Shared.Messaging
             catch (Exception e)
             {
                 InvokeErrors(e);
+                return;
             }
 
             if (IsResponseMessage(message))
-                InvokeResponseCallback(message);
+                await InvokeResponseCallbackAsync(message);
             else
-                InvokeRequestCallback(message);
+                await InvokeRequestCallbackAsync(message);
         }
 
         private bool IsResponseMessage(JObject message)
@@ -63,25 +73,33 @@ namespace IronFoundry.Warden.Shared.Messaging
             return (message["result"] != null || message["error"] != null);
         }
 
-        private void InvokeRequestCallback(JObject message)
+        private async Task InvokeRequestCallbackAsync(JObject message)
         {
+            List<Func<JObject, Task>> callbacks = new List<Func<JObject, Task>>();
+
             lock (requestCallbacks)
             {
-                foreach (var callback in requestCallbacks)
-                {
-                    callback(message);
-                }
+                callbacks.AddRange(requestCallbacks);
+            }
+
+            foreach (var callback in callbacks)
+            {
+                await callback(message);
             }
         }
 
-        private void InvokeResponseCallback(JObject message)
+        private async Task InvokeResponseCallbackAsync(JObject message)
         {
+            List<Func<JObject, Task>> callbacks = new List<Func<JObject,Task>>();
+
             lock (responseCallbacks)
             {
-                foreach (var callback in responseCallbacks)
-                {
-                    callback(message);
-                }
+                callbacks.AddRange(responseCallbacks);
+            }
+
+            foreach (var callback in callbacks)
+            {
+                await callback(message);
             }
         }
 
@@ -108,19 +126,14 @@ namespace IronFoundry.Warden.Shared.Messaging
             return writer.WriteLineAsync(text);
         }
 
-        private Task ReadAsync()
-        {
-            tokenSource.Cancel();
-            tokenSource = new CancellationTokenSource();
-            token = tokenSource.Token;
-
-            return reader.ReadLineAsync()
-                .ContinueWith<Task>(HandleLine);
-        }
-
         public void Start()
         {
-            readTask = ReadAsync();
+            if (!tokenSource.IsCancellationRequested)
+                tokenSource.Cancel();
+
+            tokenSource = new CancellationTokenSource();
+
+            readTask = Task.Run(() => ReadLineAsync(tokenSource.Token));
         }
         
         public void Stop()
@@ -129,7 +142,7 @@ namespace IronFoundry.Warden.Shared.Messaging
             readTask = null;
         }
 
-        public void SubscribeRequest(Action<JObject> callback)
+        public void SubscribeRequest(Func<JObject, Task> callback)
         {
             lock (requestCallbacks)
             {
@@ -137,7 +150,7 @@ namespace IronFoundry.Warden.Shared.Messaging
             }
         }
 
-        public void SubscribeResponse(Action<JObject> callback)
+        public void SubscribeResponse(Func<JObject, Task> callback)
         {
             lock (responseCallbacks)
             {

@@ -14,26 +14,21 @@ namespace IronFoundry.Warden.ContainerHost
 
         static void Main(string[] args)
         {
-            var task = MainAsync(args);
-            task.GetAwaiter().GetResult();
-        }
-
-        static async Task MainAsync(string[] args)
-        {
             var input = Console.In;
             var output = Console.Out;
-            var dispatcher = new MessageDispatcher();
-            dispatcher.RegisterMethod<CreateProcessRequest>("CreateProcess", CreateProcessHandler);
-
-            while (!exitEvent.WaitOne(0))
+            using (var transport = new MessageTransport(input, output))
             {
-                string request = await input.ReadLineAsync();
-                if (String.IsNullOrWhiteSpace(request))
-                    continue;
+                var dispatcher = new MessageDispatcher();
+                dispatcher.RegisterMethod<CreateProcessRequest>("CreateProcess", CreateProcessHandler);
 
-                var response = await dispatcher.DispatchAsync(JObject.Parse(request));
+                transport.SubscribeRequest(
+                    async (request) =>
+                    {
+                        var response = await dispatcher.DispatchAsync(request);
+                        await transport.PublishAsync(response);
+                    });
 
-                await output.WriteLineAsync(response.ToString(Formatting.None));
+                exitEvent.WaitOne();
             }
         }
 

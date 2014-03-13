@@ -1,85 +1,43 @@
-﻿using System;
-using System.Collections.Generic;
-using System.IO;
-using System.Linq;
-using System.Text;
+﻿using System.IO;
 using System.Threading.Tasks;
-using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using Xunit;
+using IronFoundry.Warden.Shared.Messaging;
 
 namespace IronFoundry.Warden.Test.ContainerHost
 {
-    class MessageTransport
-    {
-        private TextReader reader;
-        private TextWriter writer;
-        private Task<string> pendingReadLine;
-        private List<Action<JObject>> requestCallbacks = new List<Action<JObject>>();
-
-        public MessageTransport(TextReader reader, TextWriter writer)
-        {
-            this.reader = reader;
-            this.writer = writer;
-
-            this.pendingReadLine = reader.ReadLineAsync();
-            this.pendingReadLine.ContinueWith(HandleReadLine);
-        }
-
-        void HandleReadLine(Task<string> task)
-        {
-            if (!String.IsNullOrWhiteSpace(task.Result))
-            {
-                var message = JObject.Parse(task.Result);
-
-                lock (requestCallbacks)
-                {
-                    foreach (var callback in requestCallbacks)
-                    {
-                        callback(message);
-                    }
-                }
-            }
-
-            System.Diagnostics.Debug.WriteLine("Queuing read line.");
-            this.pendingReadLine = reader.ReadLineAsync();
-            this.pendingReadLine.ContinueWith(HandleReadLine);
-        }
-
-        public Task PublishAsync(JObject message)
-        {
-            string text = message.ToString(Formatting.None);
-            return writer.WriteLineAsync(text);
-        }
-
-        public void SubscribeRequest(Action<JObject> callback)
-        {
-            lock (requestCallbacks)
-            {
-                requestCallbacks.Add(callback);
-            }
-        }
-
-        public void SubscribeResponse(Action<JObject> callback)
-        {
-        }
-    }
-
     public class MessageTransportTest
     {
+        MemoryStream outputStream = new MemoryStream();
+        MemoryStream inputStream = new MemoryStream();
+
+        StreamWriter inputStreamWriter = null;
+        StreamReader inputStreamReader = null;
+
+        StreamWriter outputStreamWriter = null;
+        StreamReader outputStreamReader = null;
+
+        MessageTransport transporter = null;
+
+        public MessageTransportTest()
+        {
+            inputStreamWriter = new StreamWriter(inputStream) { AutoFlush = true };
+            inputStreamReader = new StreamReader(inputStream);
+
+            outputStreamWriter = new StreamWriter(outputStream) { AutoFlush = true };
+            outputStreamReader = new StreamReader(outputStream);
+
+            transporter = new MessageTransport(inputStreamReader, outputStreamWriter);
+        }
+
         [Fact]
         public async void PublishSendsTextToWriter()
         {
-            var outputStream = new MemoryStream();
-            var writer = new StreamWriter(outputStream) { AutoFlush = true };
-            var reader = new StreamReader(outputStream);
-
-            var transporter = new MessageTransport(null, writer);
 
             await transporter.PublishAsync(new JObject(new JProperty("foo", "bar")));
 
             outputStream.Position = 0;
-            string output = await reader.ReadLineAsync();
+            string output = await outputStreamReader.ReadLineAsync();
 
             Assert.Equal(@"{""foo"":""bar""}", output);
         }
@@ -87,23 +45,131 @@ namespace IronFoundry.Warden.Test.ContainerHost
         [Fact]
         public async void ReceivedRequestInvokesRequestCallbackForRequest()
         {
-            var inputStream = new MemoryStream();
-            var writer = new StreamWriter(inputStream) { AutoFlush = true };
-            var reader = new StreamReader(inputStream);
-
-            var transporter = new MessageTransport(reader, null);
-
             var tcs = new TaskCompletionSource<int>();
             transporter.SubscribeRequest((request) => tcs.SetResult(0));
 
-            writer.WriteLine(@"{""jsonrpc"":""2.0"",""id"":1,""method"":""foo""}");
+            await inputStreamWriter.WriteLineAsync(@"{""jsonrpc"":""2.0"",""id"":1,""method"":""foo""}");
+            inputStream.Position = 0;
 
             Assert.Same(tcs.Task, await Task.WhenAny(tcs.Task, Task.Delay(1000)));
         }
 
-        //[Fact]
-        //public async void ReceivedRequestDoesNotInvokeRequestCallbackForResponse()
-        //{
-        //}
+        [Fact]
+        public async void ReceivedRequestDoesNotInvokeRequestCallbackForResponse()
+        {
+            var tcs = new TaskCompletionSource<int>();
+            transporter.SubscribeResponse((request) => tcs.SetResult(0));
+
+            await inputStreamWriter.WriteLineAsync(@"{""jsonrpc"":""2.0"",""id"":1,""method"":""foo""}");
+            inputStream.Position = 0;
+
+            Assert.NotSame(tcs.Task, await Task.WhenAny(tcs.Task, Task.Delay(150)));
+            Assert.False(tcs.Task.IsCompleted); 
+        }
+
+        [Fact]
+        public async void ReceivedResponseInvokesResponseCallback()
+        {
+            var tcs = new TaskCompletionSource<int>();
+            transporter.SubscribeResponse((request) => tcs.SetResult(0));
+
+            await inputStreamWriter.WriteLineAsync(@"{""jsonrpc"":""2.0"",""id"":1,""result"":""foo-result""}");
+            inputStream.Position = 0;
+
+            Assert.Same(tcs.Task, await Task.WhenAny(tcs.Task, Task.Delay(1000)));
+        }
+
+        [Fact]
+        public async void ReceivedErrorResponseInvokesResponseCallback()
+        {
+            var tcs = new TaskCompletionSource<int>();
+            transporter.SubscribeResponse((request) => tcs.SetResult(0));
+
+            await inputStreamWriter.WriteLineAsync(@"{""jsonrpc"":""2.0"",""id"":1,""error"":{""code"":1,""message"":""foo-error""}}");
+            inputStream.Position = 0;
+
+            Assert.Same(tcs.Task, await Task.WhenAny(tcs.Task, Task.Delay(1000)));
+        }
+
+        [Fact]
+        public async void ReceivedResponseDoesNotInvokesRequestCallback()
+        {
+            var tcs = new TaskCompletionSource<int>();
+            transporter.SubscribeRequest((request) => tcs.SetResult(0));
+
+            await inputStreamWriter.WriteLineAsync(@"{""jsonrpc"":""2.0"",""id"":1,""result"":""foo-result""}");
+            inputStream.Position = 0;
+
+            Assert.NotSame(tcs.Task, await Task.WhenAny(tcs.Task, Task.Delay(150)));
+            Assert.False(tcs.Task.IsCompleted); 
+        }
+
+        [Fact]
+        public async void InvalidRequestDoesNotInvokeRequest()
+        {
+            var tcs = new TaskCompletionSource<int>();
+            transporter.SubscribeRequest((request) => tcs.SetResult(0));
+
+            await inputStreamWriter.WriteLineAsync(@"!@#$%&*()");
+            inputStream.Position = 0;
+
+            Assert.NotSame(tcs.Task, await Task.WhenAny(tcs.Task, Task.Delay(150)));
+            Assert.False(tcs.Task.IsCompleted); 
+        }
+
+        [Fact]
+        public async void InvalidRequestDoesNotInvokeResponse()
+        {
+            var tcs = new TaskCompletionSource<int>();
+            transporter.SubscribeResponse((request) => tcs.SetResult(0));
+
+            await inputStreamWriter.WriteLineAsync(@"!@#$%&*()");
+            inputStream.Position = 0;
+
+            Assert.NotSame(tcs.Task, await Task.WhenAny(tcs.Task, Task.Delay(150)));
+            Assert.False(tcs.Task.IsCompleted);
+        }
+
+        [Fact]
+        public async void InvalidRequestNotifiesOfError()
+        {
+            var tcs = new TaskCompletionSource<int>();
+            transporter.SubscribeError(e => tcs.SetResult(0));
+
+            await inputStreamWriter.WriteLineAsync(@"!@#$%&*()");
+            inputStream.Position = 0;
+
+            Assert.Same(tcs.Task, await Task.WhenAny(tcs.Task, Task.Delay(1000)));
+        }
+
+        [Fact]
+        public async void StoppingWillHaltRequestPublication()
+        {
+            var tcs = new TaskCompletionSource<int>();
+            transporter.SubscribeResponse((request) => tcs.SetResult(0));
+
+            transporter.Stop();
+
+            await inputStreamWriter.WriteLineAsync(@"{""jsonrpc"":""2.0"",""id"":1,""result"":""foo-result""}");
+            inputStream.Position = 0;
+
+            Assert.NotSame(tcs.Task, await Task.WhenAny(tcs.Task, Task.Delay(150)));
+            Assert.False(tcs.Task.IsCompleted);
+        }
+
+        [Fact]
+        public async void StartWillRestartPublicationProcess()
+        {
+            var tcs = new TaskCompletionSource<int>();
+            transporter.SubscribeResponse((request) => tcs.SetResult(0));
+
+            transporter.Stop();
+            transporter.Start();
+
+            await inputStreamWriter.WriteLineAsync(@"{""jsonrpc"":""2.0"",""id"":1,""result"":""foo-result""}");
+            inputStream.Position = 0;
+
+            Assert.Same(tcs.Task, await Task.WhenAny(tcs.Task, Task.Delay(1000)));
+        }
     }
 }

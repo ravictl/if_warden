@@ -1,14 +1,23 @@
 ﻿namespace IronFoundry.Warden.Containers
 {
+    using IronFoundry.Warden.Test;
     using IronFoundry.Warden.PInvoke;
     using System;
     using System.Collections.Generic;
     using System.Diagnostics;
+    using System.DirectoryServices.AccountManagement;
     using System.IO;
     using System.Linq;
     using System.Text;
     using System.Threading.Tasks;
+    using System.Web.Security;
     using Xunit;
+    using System.Security;
+    using System.Security.AccessControl;
+    using IronFoundry.Warden.Test.TestSupport;
+
+
+ 
 
     public class ExternalProcessContainersTest : IDisposable
     {
@@ -72,8 +81,8 @@
         {
             ProcessStartInfo si = new ProcessStartInfo("DoesNotExist.exe");
 
-            var ex = Record.Exception(()=> launcher.LaunchProcess(si, jobObject));
-            ProcessLauncherException processException = (ProcessLauncherException) ex;
+            var ex = Record.Exception(() => launcher.LaunchProcess(si, jobObject));
+            ProcessLauncherException processException = (ProcessLauncherException)ex;
 
             Assert.Equal(-32603, processException.Code);
             Assert.Contains("CreateProcessHandler", processException.RemoteData);
@@ -90,9 +99,46 @@
             Assert.Contains("CreateProcessHandler", processException.RemoteData);
         }
 
+        [FactAdminRequired]
+        public void CanLaunchProcessAsAlternateUser()
+        {
+            string shortId = this.GetType().GetHashCode().ToString();
+            string testUserName = "IFTest_" + shortId;
+
+            using (var testUser = TestUserHolder.CreateUser(testUserName))
+            {
+                AddFileSecurity(tempDirectory, testUser.Principal.Name, FileSystemRights.FullControl, AccessControlType.Allow);
+
+                var tempFile = Path.Combine(tempDirectory, Guid.NewGuid().ToString());
+
+                ProcessStartInfo si = new ProcessStartInfo("cmd.exe", string.Format(@"/K echo %USERNAME% > {0}", tempFile))
+                {
+                    UserName = testUserName,
+                    Password = testUser.Password.ToSecureString()
+                };
+
+                using (var p = launcher.LaunchProcess(si, jobObject))
+                {
+                    var output = File.ReadAllText(tempFile);
+                    Assert.Contains(testUserName, output);
+                    p.Kill();
+                }
+            }
+        }
+
+        private void AddFileSecurity(string file, string account, FileSystemRights rights, AccessControlType access)
+        {
+
+            var fileSecurity = File.GetAccessControl(file);
+
+            fileSecurity.AddAccessRule(new FileSystemAccessRule(account, rights, access));
+
+            File.SetAccessControl(file, fileSecurity);
+        }
+
         // Can start process as specific user        
         // Can send stdinput to remote process
-        
+
         //[Fact]
         //public void CanGetStdoutFromRemoteProcess()
         //{
@@ -104,7 +150,7 @@
         //    using (var p = launcher.LaunchProcess(si, jobObject))
         //    {
         //        StringBuilder builder = new StringBuilder();
-                
+
         //        var output = p.StandardOutput.ReadLine();
         //        Assert.Contains("Boomerang", output);
         //    }

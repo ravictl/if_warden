@@ -1,4 +1,7 @@
-﻿using System.Diagnostics;
+﻿using System;
+using System.Diagnostics;
+using System.Runtime.InteropServices;
+using System.Security;
 
 namespace IronFoundry.Warden.Shared.Messaging
 {
@@ -12,10 +15,14 @@ namespace IronFoundry.Warden.Shared.Messaging
         {
             this.FileName = si.FileName;
             this.Arguments = si.Arguments;
+            this.UserName = si.UserName;
+            this.Password = si.Password == null ? null : si.Password.ToUnsecureString();
         }
 
         public string FileName { get; set; }
         public string Arguments { get; set; }
+        public string UserName { get; set; }
+        public string Password { get; set; }
 
         public ProcessStartInfo ToProcessStartInfo()
         {
@@ -25,6 +32,8 @@ namespace IronFoundry.Warden.Shared.Messaging
                 CreateNoWindow = true,
                 FileName = this.FileName,
                 Arguments = this.Arguments,
+                UserName = this.UserName,
+                Password = string.IsNullOrEmpty(this.Password) ? null : this.Password.ToSecureString(),
             };
         }
     }

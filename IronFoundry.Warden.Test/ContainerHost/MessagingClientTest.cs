@@ -11,6 +11,20 @@ using Xunit;
 
 namespace IronFoundry.Warden.Test.ContainerHost
 {
+    [Serializable]
+    public class MessagingException : Exception
+    {
+        public MessagingException() { }
+        public MessagingException(string message) : base(message) { }
+        public MessagingException(string message, Exception inner) : base(message, inner) { }
+        protected MessagingException(
+          System.Runtime.Serialization.SerializationInfo info,
+          System.Runtime.Serialization.StreamingContext context)
+            : base(info, context) { }
+
+        public JsonRpcErrorResponse ErrorResponse { get; set; }
+    }
+
     public class MessagingClient
     {
         private Action<string> transportHandler;
@@ -47,6 +61,10 @@ namespace IronFoundry.Warden.Test.ContainerHost
             if (awaitingResponse.TryGetValue(id, out publisher))
             {
                 publisher.Publish(response);
+            }
+            else
+            {
+                throw new MessagingException("No one waiting for response " + id);
             }
         }
 
@@ -111,7 +129,15 @@ namespace IronFoundry.Warden.Test.ContainerHost
 
             override public void Publish(JObject response)
             {
-                tcs.SetResult(response.ToObject<TResponse>());
+                if (IsErrorResponse(response))
+                {
+                    var error = BuildErrorResponse(response);
+                    tcs.SetException(new MessagingException() { ErrorResponse = error });
+                }
+                else
+                {
+                    tcs.SetResult(response.ToObject<TResponse>());
+                }
             }
 
             public Task<TResponse> Task
@@ -240,23 +266,90 @@ namespace IronFoundry.Warden.Test.ContainerHost
             Assert.NotNull(response);
         }
 
+        [Fact]
+        public async void StronglyTypedResponseContainsProperResults()
+        {
+            MessagingClient client = null;
+            var r = new CustomRequest();
+
+            client = new MessagingClient(m =>
+            {
+                client.PublishResponse(new JObject(
+                    new JProperty("jsonrpc", "2.0"),
+                    new JProperty("id", r.id),
+                    new JProperty("result", "ResultData")
+                    ));
+            });
+
+            CustomResponse response = await client.SendMessageAsync<CustomRequest, CustomResponse>(r);
+            Assert.Equal("ResultData", response.result);
+        }
+
+        [Fact]
+        public void StronglyTypedRequestErrorsThrowsProperExceptionType()
+        {
+            MessagingClient client = null;
+            var r = new CustomRequest();
+
+            client = new MessagingClient(m =>
+            {
+                client.PublishResponse(
+                    new JObject(
+                        new JProperty("jsonrpc", "2.0"),
+                        new JProperty("id", r.id),
+                        new JProperty("error",
+                            new JObject(
+                                new JProperty("code", 1),
+                                new JProperty("message", "Error Message"),
+                                new JProperty("data", "Error Data")
+                                )
+                            )
+                        )
+                    );
+            });
+
+            Exception recordedExeption = Record.Exception( () => {
+                var responseTask = client.SendMessageAsync<CustomRequest, CustomResponse>(r);
+                var result = responseTask.Result;
+            });
+
+            Assert.IsType<MessagingException>(((AggregateException)recordedExeption).InnerExceptions[0]);
+        }
+
+        [Fact]
+        public void ThrowsWhenReceivingAnUncorrelatableResponse()
+        {
+            MessagingClient client = new MessagingClient(s => { }) ;
+            var r = new JsonRpcRequest("TestMethod");
+
+            var exception = Record.Exception(() =>
+            {
+                client.PublishResponse(
+                new JObject(
+                   new JProperty("jsonrpc", "2.0"),
+                   new JProperty("id", r.id + "_notit"),
+                   new JProperty("result", "0")
+                   ));
+            });
+
+            Assert.IsType<MessagingException>(exception);
+        }
+
+        // Uncorrelated Response throws?
+        // Request timesout
+        // Disposes completes awaiting tasks
+        // 
+
         class CustomRequest : JsonRpcRequest
         {
             public CustomRequest() : base("CustomRequestMethod")
             {
-
             }
         }
 
         class CustomResponse : JsonRpcResponse<string>
         {
-
         }
 
-        // Strongly typed handling
-        // Uncorrelated Response throws?
-        // Request timesout
-        // Disposes completes awaiting tasks
-        // 
     }
 }

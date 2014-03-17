@@ -1,10 +1,9 @@
 ﻿using System;
 using System.Diagnostics;
 using System.IO;
+using System.Threading.Tasks;
 using IronFoundry.Warden.Shared.Messaging;
 using IronFoundry.Warden.Utilities;
-using Newtonsoft.Json;
-using Newtonsoft.Json.Linq;
 
 namespace IronFoundry.Warden.Containers
 {
@@ -12,6 +11,8 @@ namespace IronFoundry.Warden.Containers
     {
         string hostExe = "IronFoundry.Warden.ContainerHost.exe";
         Process hostProcess;
+        MessageTransport messageTransport;
+        MessagingClient messagingClient;
 
         public IProcess LaunchProcess(ProcessStartInfo si, JobObject jobObject)
         {
@@ -26,20 +27,39 @@ namespace IronFoundry.Warden.Containers
 
                 hostProcess = Process.Start(hostStartInfo);
 
+                messageTransport = new MessageTransport(hostProcess.StandardOutput, hostProcess.StandardInput);
+                messagingClient = new MessagingClient(message => 
+                {
+                    messageTransport.PublishAsync(message).GetAwaiter().GetResult();
+                });
+                messageTransport.SubscribeResponse(message =>
+                {
+                    messagingClient.PublishResponse(message);
+                    return Task.FromResult(0);
+                });
+
                 jobObject.AssignProcessToJob(hostProcess);
             }
 
-            return RequestStartProcess(si);
+            return RequestStartProcessAsync(si)
+                .GetAwaiter()
+                .GetResult();
         }
 
-        private IProcess RequestStartProcess(ProcessStartInfo si)
+        private async Task<IProcess> RequestStartProcessAsync(ProcessStartInfo si)
         {
-            var msg = new CreateProcessRequest(si);
+            CreateProcessRequest request = new CreateProcessRequest(si);
+            CreateProcessResponse response = null;
+            
+            try
+            {
+                response = await messagingClient.SendMessageAsync<CreateProcessRequest, CreateProcessResponse>(request);
+            }
+            catch (MessagingException ex)
+            {
+                throw ProcessLauncherError(ex);
+            }
 
-            var jsonMessage = JsonConvert.SerializeObject(msg, Formatting.None);
-            hostProcess.StandardInput.WriteLine(jsonMessage);
-
-            var response = GetResponse<CreateProcessResponse>();
             Process process = null;
             try
             {
@@ -52,52 +72,49 @@ namespace IronFoundry.Warden.Containers
             if (process == null)
             {
                 // The process was unable to start or has died prematurely
-                var exitInfo = GetProcessExitInfo(response.result.Id);
+                var exitInfo = await GetProcessExitInfoAsync(response.result.Id);
                 var message = String.Format("Process was unable to start or died prematurely. Process exit code was {0}.\n{1}", exitInfo.ExitCode, exitInfo.StandardError);
 
-                throw new ProcessLauncherException(message)
-                {
-                    Code = exitInfo.ExitCode,
-                    RemoteData = exitInfo.StandardError,
-                };
+                throw ProcessLauncherError(message, exitInfo.ExitCode, exitInfo.StandardError);
             }
 
             return new RealProcessWrapper(process);
         }
 
-        private GetProcessExitInfoResult GetProcessExitInfo(int processId)
+        private async Task<GetProcessExitInfoResult> GetProcessExitInfoAsync(int processId)
         {
-            var request = new GetProcessExitInfoRequest(
+            GetProcessExitInfoRequest request = new GetProcessExitInfoRequest(
                 new GetProcessExitInfoParams
                 {
                     Id = processId
                 });
+            GetProcessExitInfoResponse response = null;
 
-            var jsonRequest = JsonConvert.SerializeObject(request, Formatting.None);
-            hostProcess.StandardInput.WriteLine(jsonRequest);
-
-            var jsonResponse = GetResponse<GetProcessExitInfoResponse>();
-            return jsonResponse.result;
-        }
-
-        private JObject GetResponse()
-        {
-            var response = hostProcess.StandardOutput.ReadLine();
-            return JObject.Parse(response);
-        }
-
-        private T GetResponse<T>()
-            where T : JsonRpcResponse, new()
-        {
-            var response = GetResponse();
-
-            var error = response["error"];
-            if (error != null)
+            try
             {
-                throw new ProcessLauncherException(error["message"].ToString()) { Code = (int)error["code"], RemoteData = error["data"].ToString() };
+                response = await messagingClient.SendMessageAsync<GetProcessExitInfoRequest, GetProcessExitInfoResponse>(request);
+            }
+            catch (MessagingException ex)
+            {
+                throw ProcessLauncherError(ex);
             }
 
-            return response.ToObject<T>();
+            return response.result;
+        }
+
+        private ProcessLauncherException ProcessLauncherError(string message, int code, string remoteData, Exception innerException = null)
+        {
+            return new ProcessLauncherException(message, innerException)
+            {
+                Code = code,
+                RemoteData = remoteData,
+            };
+        }
+
+        private ProcessLauncherException ProcessLauncherError(MessagingException ex)
+        {
+            var errorInfo = ex.ErrorResponse.error;
+            return ProcessLauncherError(errorInfo.Message, errorInfo.Code, errorInfo.Data, ex);
         }
 
         class RealProcessWrapper : IProcess

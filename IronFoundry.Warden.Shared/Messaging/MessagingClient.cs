@@ -9,11 +9,11 @@ namespace IronFoundry.Warden.Shared.Messaging
 {
     public class MessagingClient : IDisposable
     {
-        private Action<string> transportHandler;
+        private Action<JObject> transportHandler;
         private ConcurrentDictionary<string, ResponsePublisher> awaitingResponse =
             new ConcurrentDictionary<string, ResponsePublisher>();
 
-        public MessagingClient(Action<string> transportHandler)
+        public MessagingClient(Action<JObject> transportHandler)
         {
             this.transportHandler = transportHandler;
         }
@@ -53,7 +53,8 @@ namespace IronFoundry.Warden.Shared.Messaging
                 throw new MessagingException(String.Format("A message with the id '{0}' is already pending.", request.id));
             }
 
-            transportHandler(JsonConvert.SerializeObject(request, Formatting.None));
+            // TODO: Wire up error handling to raise an error on the publisher.Task when the transport fails to send the message.
+            transportHandler(JObject.FromObject(request));
             return publisher.Task;
         }
 
@@ -67,7 +68,8 @@ namespace IronFoundry.Warden.Shared.Messaging
                 throw new MessagingException(String.Format("A message with the id '{0}' is already pending.", request.id));
             }
 
-            transportHandler(JsonConvert.SerializeObject(request, Formatting.None));
+            // TODO: Wire up error handling to raise an error on the publisher.Task when the transport fails to send the message.
+            transportHandler(JObject.FromObject(request));
             return publisher.Task;
         }
 

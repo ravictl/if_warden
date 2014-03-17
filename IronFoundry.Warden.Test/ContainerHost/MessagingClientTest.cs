@@ -20,9 +20,10 @@ namespace IronFoundry.Warden.Test.ContainerHost
             MessagingClient client = null;
             JsonRpcRequest r = new JsonRpcRequest("TestMethod");
 
-            client = new MessagingClient(
-                m => invoked = true
-            );
+            client = new MessagingClient(m =>
+            {
+                invoked = true;
+            });
 
             client.SendMessageAsync(r);
 

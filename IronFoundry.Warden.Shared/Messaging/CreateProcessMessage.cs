@@ -30,6 +30,7 @@ namespace IronFoundry.Warden.Shared.Messaging
             {
                 UseShellExecute = false,
                 CreateNoWindow = true,
+                LoadUserProfile = false,
                 FileName = this.FileName,
                 Arguments = this.Arguments,
                 UserName = this.UserName,

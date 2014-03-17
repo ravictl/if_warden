@@ -148,6 +148,11 @@
                 get { return process.ExitCode; }
             }
 
+            public IntPtr Handle
+            {
+                get { return process.Handle; }
+            }
+
             public bool HasExited
             {
                 get { return process.HasExited; }
@@ -180,6 +185,11 @@
             public long WorkingSet
             {
                 get { return process.WorkingSet64; }
+            }
+
+            public void Dispose()
+            {
+                process.Dispose();
             }
         }
     }

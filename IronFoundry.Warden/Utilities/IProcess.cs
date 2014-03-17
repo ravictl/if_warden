@@ -6,11 +6,12 @@ using System.Threading.Tasks;
 
 namespace IronFoundry.Warden.Utilities
 {
-    public interface IProcess
+    public interface IProcess : IDisposable
     {
         int ExitCode { get; }
+        IntPtr Handle { get; }
         bool HasExited { get; }
-        int Id { get; }                
+        int Id { get; }
         
         TimeSpan TotalProcessorTime { get;  }
         TimeSpan TotalUserProcessorTime { get; }
@@ -19,7 +20,5 @@ namespace IronFoundry.Warden.Utilities
         event EventHandler Exited;
 
         void Kill();
-
-        
     }
 }

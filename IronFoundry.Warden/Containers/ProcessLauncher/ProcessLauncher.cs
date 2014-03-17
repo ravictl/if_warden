@@ -2,6 +2,7 @@
 using System.Diagnostics;
 using System.IO;
 using IronFoundry.Warden.Shared.Messaging;
+using IronFoundry.Warden.Utilities;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 
@@ -12,7 +13,7 @@ namespace IronFoundry.Warden.Containers
         string hostExe = "IronFoundry.Warden.ContainerHost.exe";
         Process hostProcess;
 
-        public Process LaunchProcess(ProcessStartInfo si, JobObject jobObject)
+        public IProcess LaunchProcess(ProcessStartInfo si, JobObject jobObject)
         {
             if (hostProcess == null)
             {
@@ -31,7 +32,7 @@ namespace IronFoundry.Warden.Containers
             return RequestStartProcess(si);
         }
 
-        private Process RequestStartProcess(ProcessStartInfo si)
+        private IProcess RequestStartProcess(ProcessStartInfo si)
         {
             var msg = new CreateProcessRequest(si);
 
@@ -39,7 +40,44 @@ namespace IronFoundry.Warden.Containers
             hostProcess.StandardInput.WriteLine(jsonMessage);
 
             var response = GetResponse<CreateProcessResponse>();
-            return Process.GetProcessById(response.result.Id);
+            Process process = null;
+            try
+            {
+                process = Process.GetProcessById(response.result.Id);
+            }
+            catch (ArgumentException)
+            {
+            }
+
+            if (process == null)
+            {
+                // The process was unable to start or has died prematurely
+                var exitInfo = GetProcessExitInfo(response.result.Id);
+                var message = String.Format("Process was unable to start or died prematurely. Process exit code was {0}.\n{1}", exitInfo.ExitCode, exitInfo.StandardError);
+
+                throw new ProcessLauncherException(message)
+                {
+                    Code = exitInfo.ExitCode,
+                    RemoteData = exitInfo.StandardError,
+                };
+            }
+
+            return new RealProcessWrapper(process);
+        }
+
+        private GetProcessExitInfoResult GetProcessExitInfo(int processId)
+        {
+            var request = new GetProcessExitInfoRequest(
+                new GetProcessExitInfoParams
+                {
+                    Id = processId
+                });
+
+            var jsonRequest = JsonConvert.SerializeObject(request, Formatting.None);
+            hostProcess.StandardInput.WriteLine(jsonRequest);
+
+            var jsonResponse = GetResponse<GetProcessExitInfoResponse>();
+            return jsonResponse.result;
         }
 
         private JObject GetResponse()
@@ -61,6 +99,70 @@ namespace IronFoundry.Warden.Containers
 
             return response.ToObject<T>();
         }
+
+        class RealProcessWrapper : IProcess
+        {
+            private readonly Process process;
+            public event EventHandler Exited;
+
+            public RealProcessWrapper(Process process)
+            {
+                this.process = process;
+                Id = process.Id;
+                process.Exited += (o, e) => this.OnExited();
+            }
+
+            public int Id { get; private set; }
+
+            public int ExitCode
+            {
+                get { return process.ExitCode; }
+            }
+
+            public IntPtr Handle
+            {
+                get { return process.Handle; }
+            }
+
+            public bool HasExited
+            {
+                get { return process.HasExited; }
+            }
+
+            public TimeSpan TotalProcessorTime
+            {
+                get { return process.TotalProcessorTime; }
+            }
+
+            public TimeSpan TotalUserProcessorTime
+            {
+                get { return process.UserProcessorTime; }
+            }
+
+            public void Kill()
+            {
+                process.Kill();
+            }
+
+            protected virtual void OnExited()
+            {
+                var handlers = Exited;
+                if (handlers != null)
+                {
+                    handlers.Invoke(this, EventArgs.Empty);
+                }
+            }
+
+            public long WorkingSet
+            {
+                get { return process.WorkingSet64; }
+            }
+
+            public void Dispose()
+            {
+                process.Dispose();
+            }
+        }
     }
 
     [Serializable]
@@ -75,6 +177,6 @@ namespace IronFoundry.Warden.Containers
             : base(info, context) { }
 
         public int Code { get; set; }
-        public string RemoteData { get; set; } 
+        public string RemoteData { get; set; }
     }
 }

@@ -55,6 +55,8 @@ namespace IronFoundry.Warden.Shared.Messaging
     public class CreateProcessResult
     {
         public int Id { get; set; }
+        public bool HasExited { get; set; }
+        public int ExitCode { get; set; }
     }
 
     public class CreateProcessResponse : JsonRpcResponse<CreateProcessResult>
@@ -64,6 +66,43 @@ namespace IronFoundry.Warden.Shared.Messaging
         }
 
         public CreateProcessResponse(string id, CreateProcessResult result) : base(id, result)
+        {
+        }
+    }
+
+    public class GetProcessExitInfoParams
+    {
+        public int Id { get; set; }
+    }
+
+    public class GetProcessExitInfoResult
+    {
+        public int ExitCode { get; set; }
+        public bool HasExited { get; set; }
+        public string StandardError { get; set; }
+    }
+
+    public class GetProcessExitInfoRequest : JsonRpcRequest<GetProcessExitInfoParams>
+    {
+        public GetProcessExitInfoRequest() 
+            : base("GetProcessExitInfo")
+        {
+        }
+
+        public GetProcessExitInfoRequest(GetProcessExitInfoParams @params)
+            : base("GetProcessExitInfo")
+        {
+            this.@params = @params;
+        }
+    }
+
+    public class GetProcessExitInfoResponse : JsonRpcResponse<GetProcessExitInfoResult>
+    {
+        public GetProcessExitInfoResponse() : base()
+        {
+        }
+
+        public GetProcessExitInfoResponse(string id, GetProcessExitInfoResult result) : base(id, result)
         {
         }
     }

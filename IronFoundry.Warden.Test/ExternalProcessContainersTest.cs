@@ -55,6 +55,16 @@
         }
 
         [Fact]
+        public void ReturnsProcessExitStatus()
+        {
+            ProcessStartInfo si = new ProcessStartInfo("cmd.exe", "/C exit 10");
+
+            var ex = Assert.Throws<ProcessLauncherException>(() => launcher.LaunchProcess(si, jobObject));
+
+            Assert.Equal(10, ex.Code);
+        }
+
+        [Fact]
         public void SuppliedArgumentsInStartupInfoIsPassedToRemoteProcess()
         {
             var tempFile = Path.Combine(tempDirectory, Guid.NewGuid().ToString());
@@ -136,7 +146,6 @@
             File.SetAccessControl(file, fileSecurity);
         }
 
-        // Can start process as specific user        
         // Can send stdinput to remote process
 
         //[Fact]

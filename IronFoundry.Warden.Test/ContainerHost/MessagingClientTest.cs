@@ -25,7 +25,7 @@ namespace IronFoundry.Warden.Test.ContainerHost
         public JsonRpcErrorResponse ErrorResponse { get; set; }
     }
 
-    public class MessagingClient
+    public class MessagingClient : IDisposable
     {
         private Action<string> transportHandler;
         private Dictionary<string, ResponsePublisher> awaitingResponse =
@@ -88,7 +88,7 @@ namespace IronFoundry.Warden.Test.ContainerHost
             }
         }
 
-        private class DefaultResponsePublisher : ResponsePublisher
+        private class DefaultResponsePublisher : ResponsePublisher, IDisposable
         {
             TaskCompletionSource<JsonRpcResponse> tcs = new TaskCompletionSource<JsonRpcResponse>();
 
@@ -116,9 +116,14 @@ namespace IronFoundry.Warden.Test.ContainerHost
                     return tcs.Task;
                 }
             }
+
+         public void Dispose()
+         {
+             tcs.TrySetException(new OperationCanceledException());
+         }
         }
 
-        private class StronglyTypedResponsePublisher<TResponse> : ResponsePublisher
+        private class StronglyTypedResponsePublisher<TResponse> : ResponsePublisher, IDisposable
             where TResponse : JsonRpcResponse
         {
             private TaskCompletionSource<TResponse> tcs = new TaskCompletionSource<TResponse>();
@@ -146,6 +151,25 @@ namespace IronFoundry.Warden.Test.ContainerHost
                 {
                     return tcs.Task;
                 }
+            }
+            
+            public void Dispose()
+            {
+                tcs.TrySetException(new OperationCanceledException());
+            }
+        }
+
+        public void Dispose()
+        {
+            foreach (var key in awaitingResponse.Keys.ToArray())
+            {
+                ResponsePublisher publisher;
+                if (awaitingResponse.TryGetValue(key, out publisher))
+                {
+                    var disposable = publisher as IDisposable;
+                    if (disposable != null) disposable.Dispose();
+                }
+                awaitingResponse.Remove(key);
             }
         }
     }
@@ -335,10 +359,23 @@ namespace IronFoundry.Warden.Test.ContainerHost
             Assert.IsType<MessagingException>(exception);
         }
 
-        // Uncorrelated Response throws?
-        // Request timesout
-        // Disposes completes awaiting tasks
-        // 
+        [Fact]
+        public void DisposingDisposesExistingAwaiters()
+        {
+            MessagingClient client = null;
+            JsonRpcRequest r = new JsonRpcRequest("TestMethod");
+
+            client = new MessagingClient(m => { });
+
+            var response = client.SendMessageAsync(r);
+
+            client.Dispose();
+
+            var exception = Record.Exception( () => { response.Wait(1000); } );
+
+            Assert.IsType<OperationCanceledException>(((AggregateException)exception).InnerExceptions[0]);
+        }
+
 
         class CustomRequest : JsonRpcRequest
         {

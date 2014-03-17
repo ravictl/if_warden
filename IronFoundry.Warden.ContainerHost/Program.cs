@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Concurrent;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.Text;
 using System.Threading;
@@ -13,11 +14,13 @@ namespace IronFoundry.Warden.ContainerHost
         public ProcessContext()
         {
             StandardError = new StringBuilder();
+            StandardOutputTail = new Queue<string>();
         }
 
         public bool HasExited { get; set; }
         public int ExitCode { get; set; }
         public StringBuilder StandardError { get; set; }
+        public Queue<string> StandardOutputTail { get; set; }
 
         public void HandleErrorData(object sender, DataReceivedEventArgs e)
         {
@@ -26,6 +29,10 @@ namespace IronFoundry.Warden.ContainerHost
 
         public void HandleOutputData(object sender, DataReceivedEventArgs e)
         {
+            while (StandardOutputTail.Count > 100)
+                StandardOutputTail.Dequeue();
+
+            StandardOutputTail.Enqueue(e.Data);
         }
 
         public void HandleProcessExit(object sender, EventArgs e)
@@ -73,19 +80,19 @@ namespace IronFoundry.Warden.ContainerHost
             startInfo.RedirectStandardError = true;
             startInfo.RedirectStandardOutput = true;
 
-            var exitInfo = new ProcessContext();
+            var processContext = new ProcessContext();
 
             Process process = Process.Start(startInfo);
 
-            process.ErrorDataReceived += exitInfo.HandleErrorData;
-            process.OutputDataReceived += exitInfo.HandleOutputData;
-            process.Exited += exitInfo.HandleProcessExit;
+            process.ErrorDataReceived += processContext.HandleErrorData;
+            process.OutputDataReceived += processContext.HandleOutputData;
+            process.Exited += processContext.HandleProcessExit;
 
             process.BeginErrorReadLine();
             process.BeginOutputReadLine();
             process.EnableRaisingEvents = true;
             
-            processContexts[process.Id] = exitInfo;
+            processContexts[process.Id] = processContext;
 
             return Task.FromResult<object>(
                 new CreateProcessResponse(
@@ -100,17 +107,18 @@ namespace IronFoundry.Warden.ContainerHost
         {
             //Debug.Assert(false);
 
-            ProcessContext exitInfo;
-            if (processContexts.TryGetValue(request.@params.Id, out exitInfo))
+            ProcessContext processContext;
+            if (processContexts.TryGetValue(request.@params.Id, out processContext))
             {
                 return Task.FromResult<object>(
                     new GetProcessExitInfoResponse(
                         request.id,
                         new GetProcessExitInfoResult
                         {
-                            ExitCode = exitInfo.ExitCode,
-                            HasExited = exitInfo.HasExited,
-                            StandardError = exitInfo.StandardError.ToString(),
+                            ExitCode = processContext.ExitCode,
+                            HasExited = processContext.HasExited,
+                            StandardError = processContext.StandardError.ToString(),
+                            StandardOutputTail = String.Join("\n", processContext.StandardOutputTail),
                         }));
             }
             else

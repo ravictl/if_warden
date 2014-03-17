@@ -80,6 +80,7 @@ namespace IronFoundry.Warden.Shared.Messaging
         public int ExitCode { get; set; }
         public bool HasExited { get; set; }
         public string StandardError { get; set; }
+        public string StandardOutputTail { get; set; }
     }
 
     public class GetProcessExitInfoRequest : JsonRpcRequest<GetProcessExitInfoParams>

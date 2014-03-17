@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Diagnostics;
 using System.IO;
+using System.Text;
 using System.Threading.Tasks;
 using IronFoundry.Warden.Shared.Messaging;
 using IronFoundry.Warden.Utilities;
@@ -73,9 +74,16 @@ namespace IronFoundry.Warden.Containers
             {
                 // The process was unable to start or has died prematurely
                 var exitInfo = await GetProcessExitInfoAsync(response.result.Id);
-                var message = String.Format("Process was unable to start or died prematurely. Process exit code was {0}.\n{1}", exitInfo.ExitCode, exitInfo.StandardError);
+                var builder = new StringBuilder();
+                builder.AppendLine(exitInfo.StandardError);
+                builder.AppendLine(exitInfo.StandardOutputTail);
 
-                throw ProcessLauncherError(message, exitInfo.ExitCode, exitInfo.StandardError);
+                var message = String.Format(
+                    "Process was unable to start or died prematurely. Process exit code was {0}.\n{1}", 
+                    exitInfo.ExitCode, 
+                    builder.ToString());
+
+                throw ProcessLauncherError(message, exitInfo.ExitCode, builder.ToString());
             }
 
             return new RealProcessWrapper(process);

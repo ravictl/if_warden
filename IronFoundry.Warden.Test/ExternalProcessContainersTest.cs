@@ -55,13 +55,23 @@
         }
 
         [Fact]
-        public void ReturnsProcessExitStatus()
+        public void WhenProcessFailsToStart_ReturnsProcessExitStatus()
         {
             ProcessStartInfo si = new ProcessStartInfo("cmd.exe", "/C exit 10");
 
             var ex = Assert.Throws<ProcessLauncherException>(() => launcher.LaunchProcess(si, jobObject));
 
             Assert.Equal(10, ex.Code);
+        }
+
+        [Fact]
+        public void WhenProcessFailsToStart_ReturnsStandardOutputTail()
+        {
+            ProcessStartInfo si = new ProcessStartInfo("cmd.exe", "/C echo Failed to start && exit 10");
+
+            var ex = Assert.Throws<ProcessLauncherException>(() => launcher.LaunchProcess(si, jobObject));
+
+            Assert.Contains("Failed to start", ex.RemoteData);
         }
 
         [Fact]

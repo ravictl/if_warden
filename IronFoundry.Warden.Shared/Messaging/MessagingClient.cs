@@ -1,18 +1,17 @@
-﻿using Newtonsoft.Json;
-using Newtonsoft.Json.Linq;
-using System;
-using System.Collections.Generic;
+﻿using System;
+using System.Collections.Concurrent;
 using System.Linq;
-using System.Text;
 using System.Threading.Tasks;
+using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
 
 namespace IronFoundry.Warden.Shared.Messaging
 {
     public class MessagingClient : IDisposable
     {
         private Action<string> transportHandler;
-        private Dictionary<string, ResponsePublisher> awaitingResponse =
-            new Dictionary<string, ResponsePublisher>();
+        private ConcurrentDictionary<string, ResponsePublisher> awaitingResponse =
+            new ConcurrentDictionary<string, ResponsePublisher>();
 
         public MessagingClient(Action<string> transportHandler)
         {
@@ -24,12 +23,11 @@ namespace IronFoundry.Warden.Shared.Messaging
             foreach (var key in awaitingResponse.Keys.ToArray())
             {
                 ResponsePublisher publisher;
-                if (awaitingResponse.TryGetValue(key, out publisher))
+                if (awaitingResponse.TryRemove(key, out publisher))
                 {
                     var disposable = publisher as IDisposable;
                     if (disposable != null) disposable.Dispose();
                 }
-                awaitingResponse.Remove(key);
             }
         }
 
@@ -37,7 +35,7 @@ namespace IronFoundry.Warden.Shared.Messaging
         {
             string id = response["id"].ToString();
             ResponsePublisher publisher;
-            if (awaitingResponse.TryGetValue(id, out publisher))
+            if (awaitingResponse.TryRemove(id, out publisher))
             {
                 publisher.Publish(response);
             }
@@ -47,11 +45,15 @@ namespace IronFoundry.Warden.Shared.Messaging
             }
         }
 
-        public Task<JsonRpcResponse> SendMessageAsync(JsonRpcRequest r)
+        public Task<JsonRpcResponse> SendMessageAsync(JsonRpcRequest request)
         {
             var publisher = new DefaultResponsePublisher();
-            awaitingResponse.Add(r.id, publisher);
-            transportHandler(JsonConvert.SerializeObject(r, Formatting.None));
+            if (!awaitingResponse.TryAdd(request.id, publisher))
+            {
+                throw new MessagingException(String.Format("A message with the id '{0}' is already pending.", request.id));
+            }
+
+            transportHandler(JsonConvert.SerializeObject(request, Formatting.None));
             return publisher.Task;
         }
 
@@ -60,7 +62,11 @@ namespace IronFoundry.Warden.Shared.Messaging
             where TResult : JsonRpcResponse
         {
             var publisher = new StronglyTypedResponsePublisher<TResult>();
-            awaitingResponse.Add(request.id, publisher);
+            if (!awaitingResponse.TryAdd(request.id, publisher))
+            {
+                throw new MessagingException(String.Format("A message with the id '{0}' is already pending.", request.id));
+            }
+
             transportHandler(JsonConvert.SerializeObject(request, Formatting.None));
             return publisher.Task;
         }

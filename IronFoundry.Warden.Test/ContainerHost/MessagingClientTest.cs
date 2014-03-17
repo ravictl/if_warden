@@ -21,9 +21,8 @@ namespace IronFoundry.Warden.Test.ContainerHost
             JsonRpcRequest r = new JsonRpcRequest("TestMethod");
 
             client = new MessagingClient(
-            (m =>
-                invoked = true
-            ));
+                m => invoked = true
+            );
 
             client.SendMessageAsync(r);
 
@@ -48,7 +47,6 @@ namespace IronFoundry.Warden.Test.ContainerHost
             var response = await client.SendMessageAsync(r);
 
             Assert.Equal(r.id, response.id);
-
         }
 
         [Fact]
@@ -79,7 +77,7 @@ namespace IronFoundry.Warden.Test.ContainerHost
         }
 
         [Fact]
-        public async void ErrorResonseIncludesErrorData()
+        public async void ErrorResponseIncludesErrorData()
         {
             MessagingClient client = null;
             JsonRpcRequest r = new JsonRpcRequest("TestMethod");
@@ -180,6 +178,34 @@ namespace IronFoundry.Warden.Test.ContainerHost
         }
 
         [Fact]
+        public void ThrowsWhenReceivingDuplicateRequest()
+        {
+            MessagingClient client = null;
+            JsonRpcRequest r = new JsonRpcRequest("TestMethod");
+
+            client = new MessagingClient(m => { });
+            client.SendMessageAsync(r);
+            
+            var exception = Record.Exception(() => client.SendMessageAsync(r));
+
+            Assert.IsType<MessagingException>(exception);
+        }
+
+        [Fact]
+        public void ThrowsWhenReceivingDuplicateStronglyTypedRequest()
+        {
+            MessagingClient client = null;
+            var r = new CustomRequest();
+
+            client = new MessagingClient(m => { });
+            client.SendMessageAsync<CustomRequest, CustomResponse>(r);
+
+            var exception = Record.Exception(() => client.SendMessageAsync<CustomRequest, CustomResponse>(r));
+
+            Assert.IsType<MessagingException>(exception);
+        }
+
+        [Fact]
         public void ThrowsWhenReceivingAnUncorrelatableResponse()
         {
             MessagingClient client = new MessagingClient(s => { });
@@ -188,11 +214,42 @@ namespace IronFoundry.Warden.Test.ContainerHost
             var exception = Record.Exception(() =>
             {
                 client.PublishResponse(
-                new JObject(
-                   new JProperty("jsonrpc", "2.0"),
-                   new JProperty("id", r.id + "_notit"),
-                   new JProperty("result", "0")
-                   ));
+                    new JObject(
+                       new JProperty("jsonrpc", "2.0"),
+                       new JProperty("id", r.id + "_notit"),
+                       new JProperty("result", "0")
+                       ));
+            });
+
+            Assert.IsType<MessagingException>(exception);
+        }
+
+        [Fact]
+        public async void ThrowsWhenReceivingDuplicateResponse()
+        {
+            MessagingClient client = null;
+            JsonRpcRequest r = new JsonRpcRequest("TestMethod");
+
+            client = new MessagingClient(m =>
+            {
+                client.PublishResponse(
+                    new JObject(
+                        new JProperty("jsonrpc", "2.0"),
+                        new JProperty("id", r.id),
+                        new JProperty("result", "0")
+                        ));
+            });
+
+            await client.SendMessageAsync(r);
+
+            var exception = Record.Exception(() =>
+            {
+                client.PublishResponse(
+                    new JObject(
+                        new JProperty("jsonrpc", "2.0"),
+                        new JProperty("id", r.id),
+                        new JProperty("result", "0")
+                        ));
             });
 
             Assert.IsType<MessagingException>(exception);

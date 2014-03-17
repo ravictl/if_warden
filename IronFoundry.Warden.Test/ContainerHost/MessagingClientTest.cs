@@ -11,169 +11,6 @@ using Xunit;
 
 namespace IronFoundry.Warden.Test.ContainerHost
 {
-    [Serializable]
-    public class MessagingException : Exception
-    {
-        public MessagingException() { }
-        public MessagingException(string message) : base(message) { }
-        public MessagingException(string message, Exception inner) : base(message, inner) { }
-        protected MessagingException(
-          System.Runtime.Serialization.SerializationInfo info,
-          System.Runtime.Serialization.StreamingContext context)
-            : base(info, context) { }
-
-        public JsonRpcErrorResponse ErrorResponse { get; set; }
-    }
-
-    public class MessagingClient : IDisposable
-    {
-        private Action<string> transportHandler;
-        private Dictionary<string, ResponsePublisher> awaitingResponse =
-            new Dictionary<string, ResponsePublisher>();
-
-        public MessagingClient(Action<string> transportHandler)
-        {
-            this.transportHandler = transportHandler;
-        }
-
-        public Task<JsonRpcResponse> SendMessageAsync(JsonRpcRequest r)
-        {
-            var publisher = new DefaultResponsePublisher();
-            awaitingResponse.Add(r.id, publisher);
-            transportHandler(JsonConvert.SerializeObject(r, Formatting.None));
-            return publisher.Task;
-        }
-
-        public Task<TResult> SendMessageAsync<T, TResult>(T request)
-            where T: JsonRpcRequest
-            where TResult: JsonRpcResponse
-        {
-            var publisher = new StronglyTypedResponsePublisher<TResult>();
-            awaitingResponse.Add(request.id, publisher);
-            transportHandler(JsonConvert.SerializeObject(request, Formatting.None));
-            return publisher.Task;
-        }
-
-        public void PublishResponse(JObject response)
-        {
-            string id = response["id"].ToString();
-            ResponsePublisher publisher;
-            if (awaitingResponse.TryGetValue(id, out publisher))
-            {
-                publisher.Publish(response);
-            }
-            else
-            {
-                throw new MessagingException("No one waiting for response " + id);
-            }
-        }
-
-        private abstract class ResponsePublisher
-        {
-            abstract public void Publish(JObject response);
-
-            protected bool IsErrorResponse(JObject response)
-            {
-                return (response["error"] != null);
-            }
-
-            protected JsonRpcErrorResponse BuildErrorResponse(JObject error)
-            {
-                var errorResponse = new JsonRpcErrorResponse(error["id"].ToString());
-                errorResponse.error.Code = (int)error["error"]["code"];
-                errorResponse.error.Message = error["error"]["message"].ToString();
-                errorResponse.error.Data = error["error"]["data"] == null ? null : error["error"]["data"].ToString();
-
-                return errorResponse;
-            }
-        }
-
-        private class DefaultResponsePublisher : ResponsePublisher, IDisposable
-        {
-            TaskCompletionSource<JsonRpcResponse> tcs = new TaskCompletionSource<JsonRpcResponse>();
-
-            public DefaultResponsePublisher()
-            {
-            }
-
-            public override void Publish(JObject arg)
-            {
-                if (IsErrorResponse(arg))
-                {
-                    tcs.SetResult(BuildErrorResponse(arg));
-                }
-                else
-                {
-                    var rpcResponse = new JsonRpcResponse(arg["id"].ToString());
-                    tcs.SetResult(rpcResponse);
-                }
-            }
-
-         public Task<JsonRpcResponse> Task
-            {
-                get
-                {
-                    return tcs.Task;
-                }
-            }
-
-         public void Dispose()
-         {
-             tcs.TrySetException(new OperationCanceledException());
-         }
-        }
-
-        private class StronglyTypedResponsePublisher<TResponse> : ResponsePublisher, IDisposable
-            where TResponse : JsonRpcResponse
-        {
-            private TaskCompletionSource<TResponse> tcs = new TaskCompletionSource<TResponse>();
-
-            public StronglyTypedResponsePublisher()
-            {
-            }
-
-            override public void Publish(JObject response)
-            {
-                if (IsErrorResponse(response))
-                {
-                    var error = BuildErrorResponse(response);
-                    tcs.SetException(new MessagingException() { ErrorResponse = error });
-                }
-                else
-                {
-                    tcs.SetResult(response.ToObject<TResponse>());
-                }
-            }
-
-            public Task<TResponse> Task
-            {
-                get
-                {
-                    return tcs.Task;
-                }
-            }
-            
-            public void Dispose()
-            {
-                tcs.TrySetException(new OperationCanceledException());
-            }
-        }
-
-        public void Dispose()
-        {
-            foreach (var key in awaitingResponse.Keys.ToArray())
-            {
-                ResponsePublisher publisher;
-                if (awaitingResponse.TryGetValue(key, out publisher))
-                {
-                    var disposable = publisher as IDisposable;
-                    if (disposable != null) disposable.Dispose();
-                }
-                awaitingResponse.Remove(key);
-            }
-        }
-    }
-
     public class MessagingClientTest
     {
         [Fact]
@@ -220,7 +57,8 @@ namespace IronFoundry.Warden.Test.ContainerHost
             MessagingClient client = null;
             JsonRpcRequest r = new JsonRpcRequest("TestMethod");
 
-            client = new MessagingClient(m => {
+            client = new MessagingClient(m =>
+            {
                 client.PublishResponse(
                     new JObject(
                         new JProperty("jsonrpc", "2.0"),
@@ -263,7 +101,7 @@ namespace IronFoundry.Warden.Test.ContainerHost
                     );
             });
 
-            var response = (JsonRpcErrorResponse) await client.SendMessageAsync(r);
+            var response = (JsonRpcErrorResponse)await client.SendMessageAsync(r);
 
             Assert.Equal(1, response.error.Code);
             Assert.Equal("Error Message", response.error.Message);
@@ -286,7 +124,7 @@ namespace IronFoundry.Warden.Test.ContainerHost
                     ));
             });
 
-            CustomResponse response = await client.SendMessageAsync<CustomRequest,CustomResponse>(r);
+            CustomResponse response = await client.SendMessageAsync<CustomRequest, CustomResponse>(r);
             Assert.NotNull(response);
         }
 
@@ -332,7 +170,8 @@ namespace IronFoundry.Warden.Test.ContainerHost
                     );
             });
 
-            Exception recordedExeption = Record.Exception( () => {
+            Exception recordedExeption = Record.Exception(() =>
+            {
                 var responseTask = client.SendMessageAsync<CustomRequest, CustomResponse>(r);
                 var result = responseTask.Result;
             });
@@ -343,7 +182,7 @@ namespace IronFoundry.Warden.Test.ContainerHost
         [Fact]
         public void ThrowsWhenReceivingAnUncorrelatableResponse()
         {
-            MessagingClient client = new MessagingClient(s => { }) ;
+            MessagingClient client = new MessagingClient(s => { });
             var r = new JsonRpcRequest("TestMethod");
 
             var exception = Record.Exception(() =>
@@ -371,7 +210,7 @@ namespace IronFoundry.Warden.Test.ContainerHost
 
             client.Dispose();
 
-            var exception = Record.Exception( () => { response.Wait(1000); } );
+            var exception = Record.Exception(() => { response.Wait(1000); });
 
             Assert.IsType<OperationCanceledException>(((AggregateException)exception).InnerExceptions[0]);
         }
@@ -379,7 +218,8 @@ namespace IronFoundry.Warden.Test.ContainerHost
 
         class CustomRequest : JsonRpcRequest
         {
-            public CustomRequest() : base("CustomRequestMethod")
+            public CustomRequest()
+                : base("CustomRequestMethod")
             {
             }
         }

@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Text;
@@ -15,7 +16,7 @@ namespace IronFoundry.Warden.Containers
         MessageTransport messageTransport;
         MessagingClient messagingClient;
 
-        public IProcess LaunchProcess(ProcessStartInfo si, JobObject jobObject)
+        public IProcess LaunchProcess(CreateProcessStartInfo si, JobObject jobObject)
         {
             if (hostProcess == null)
             {
@@ -47,7 +48,7 @@ namespace IronFoundry.Warden.Containers
                 .GetResult();
         }
 
-        private async Task<IProcess> RequestStartProcessAsync(ProcessStartInfo si)
+        private async Task<IProcess> RequestStartProcessAsync(CreateProcessStartInfo si)
         {
             CreateProcessRequest request = new CreateProcessRequest(si);
             CreateProcessResponse response = null;
@@ -74,19 +75,32 @@ namespace IronFoundry.Warden.Containers
             {
                 // The process was unable to start or has died prematurely
                 var exitInfo = await GetProcessExitInfoAsync(response.result.Id);
-                var builder = new StringBuilder();
-                builder.AppendLine(exitInfo.StandardError);
-                builder.AppendLine(exitInfo.StandardOutputTail);
+                if (exitInfo.HasExited && exitInfo.ExitCode == 0)
+                {
+                    return new ExitedProcess
+                    {
+                        Id = response.result.Id,
+                        Handle = IntPtr.Zero,
+                        HasExited = exitInfo.HasExited,
+                        ExitCode = exitInfo.ExitCode,
+                    };
+                }
+                else
+                {
+                    var builder = new StringBuilder();
+                    builder.AppendLine(exitInfo.StandardError);
+                    builder.AppendLine(exitInfo.StandardOutputTail);
 
-                var message = String.Format(
-                    "Process was unable to start or died prematurely. Process exit code was {0}.\n{1}", 
-                    exitInfo.ExitCode, 
-                    builder.ToString());
+                    var message = String.Format(
+                        "Process was unable to start or died prematurely. Process exit code was {0}.\n{1}", 
+                        exitInfo.ExitCode, 
+                        builder.ToString());
 
-                throw ProcessLauncherError(message, exitInfo.ExitCode, builder.ToString());
+                    throw ProcessLauncherError(message, exitInfo.ExitCode, builder.ToString());
+                }
             }
 
-            return new RealProcessWrapper(process);
+            return new RealProcessWrapper(this, process);
         }
 
         private async Task<GetProcessExitInfoResult> GetProcessExitInfoAsync(int processId)
@@ -125,13 +139,57 @@ namespace IronFoundry.Warden.Containers
             return ProcessLauncherError(errorInfo.Message, errorInfo.Code, errorInfo.Data, ex);
         }
 
+        class ExitedProcess : IProcess
+        {
+            public int ExitCode { get; set; }
+            public IntPtr Handle { get; set; }
+            public bool HasExited { get; set; }
+            public int Id { get; set; }
+            
+            public TimeSpan TotalProcessorTime
+            {
+                get { return TimeSpan.Zero; }
+            }
+
+            public TimeSpan TotalUserProcessorTime
+            {
+                get { return TimeSpan.Zero; }
+            }
+
+            public long WorkingSet
+            {
+                get { return 0; }
+            }
+
+            EventHandler exited;
+            public event EventHandler Exited
+            {
+                add { exited += value; }
+                remove { exited -= value; }
+            }
+
+            public void Kill()
+            {
+            }
+
+            public void WaitForExit()
+            {
+            }
+
+            public void Dispose()
+            {
+            }
+        }
+
         class RealProcessWrapper : IProcess
         {
+            private readonly ProcessLauncher launcher;
             private readonly Process process;
             public event EventHandler Exited;
 
-            public RealProcessWrapper(Process process)
+            public RealProcessWrapper(ProcessLauncher launcher, Process process)
             {
+                this.launcher = launcher;
                 this.process = process;
                 Id = process.Id;
                 process.Exited += (o, e) => this.OnExited();
@@ -141,7 +199,19 @@ namespace IronFoundry.Warden.Containers
 
             public int ExitCode
             {
-                get { return process.ExitCode; }
+                get
+                {
+                    // TODO: This is a hack that we added temporarily to unblock testing.
+                    // Revisit how we get the exit code for the process!
+                    var exitInfo = launcher.GetProcessExitInfoAsync(Id)
+                        .GetAwaiter()
+                        .GetResult();
+
+                    if (!exitInfo.HasExited)
+                        throw new InvalidOperationException("The process has not exited.");
+
+                    return exitInfo.ExitCode;
+                }
             }
 
             public IntPtr Handle
@@ -151,7 +221,16 @@ namespace IronFoundry.Warden.Containers
 
             public bool HasExited
             {
-                get { return process.HasExited; }
+                get
+                {
+                    // TODO: This is a hack that we added temporarily to unblock testing.
+                    // Revisit how we get the exit code for the process!
+                    var exitInfo = launcher.GetProcessExitInfoAsync(Id)
+                        .GetAwaiter()
+                        .GetResult();
+
+                    return exitInfo.HasExited;
+                }
             }
 
             public TimeSpan TotalProcessorTime
@@ -186,6 +265,11 @@ namespace IronFoundry.Warden.Containers
             public void Dispose()
             {
                 process.Dispose();
+            }
+
+            public void WaitForExit()
+            {
+                process.WaitForExit();
             }
         }
     }

@@ -191,6 +191,11 @@
             {
                 process.Dispose();
             }
+
+            public void WaitForExit()
+            {
+                process.WaitForExit();
+            }
         }
     }
 

@@ -15,6 +15,7 @@
     using System.Security;
     using System.Security.AccessControl;
     using IronFoundry.Warden.Test.TestSupport;
+    using IronFoundry.Warden.Shared.Messaging;
 
 
  
@@ -43,7 +44,7 @@
         [Fact]
         public void StartedProcessLaunchUnderJobObject()
         {
-            ProcessStartInfo si = new ProcessStartInfo("cmd.exe");
+            var si = new CreateProcessStartInfo("cmd.exe");
 
             using (var p = launcher.LaunchProcess(si, jobObject))
             {
@@ -55,9 +56,22 @@
         }
 
         [Fact]
+        public void WhenProcessExitsImmediately_ReturnsProcess()
+        {
+            var si = new CreateProcessStartInfo("cmd.exe", "/C exit 0");
+
+            using (var p = launcher.LaunchProcess(si, jobObject))
+            {
+                Assert.NotEqual(0, p.Id);
+                Assert.True(p.HasExited);
+                Assert.Equal(0, p.ExitCode);
+            }
+        }
+
+        [Fact]
         public void WhenProcessFailsToStart_ReturnsProcessExitStatus()
         {
-            ProcessStartInfo si = new ProcessStartInfo("cmd.exe", "/C exit 10");
+            var si = new CreateProcessStartInfo("cmd.exe", "/C exit 10");
 
             var ex = Assert.Throws<ProcessLauncherException>(() => launcher.LaunchProcess(si, jobObject));
 
@@ -67,7 +81,7 @@
         [Fact]
         public void WhenProcessFailsToStart_ReturnsStandardOutputTail()
         {
-            ProcessStartInfo si = new ProcessStartInfo("cmd.exe", "/C echo Failed to start && exit 10");
+            var si = new CreateProcessStartInfo("cmd.exe", "/C echo Failed to start && exit 10");
 
             var ex = Assert.Throws<ProcessLauncherException>(() => launcher.LaunchProcess(si, jobObject));
 
@@ -79,7 +93,7 @@
         {
             var tempFile = Path.Combine(tempDirectory, Guid.NewGuid().ToString());
 
-            ProcessStartInfo si = new ProcessStartInfo("cmd.exe", string.Format(@"/K echo Boomerang > {0}", tempFile));
+            var si = new CreateProcessStartInfo("cmd.exe", string.Format(@"/K echo Boomerang > {0}", tempFile));
 
             using (var p = launcher.LaunchProcess(si, jobObject))
             {
@@ -89,9 +103,52 @@
         }
 
         [Fact]
+        public void StartsProcessWithEnvironmentVariables()
+        {
+            var tempFile = Path.Combine(tempDirectory, Guid.NewGuid().ToString());
+
+            var si = new CreateProcessStartInfo("cmd.exe", string.Format(@"/K echo %FOO% > {0}", tempFile));
+            si.EnvironmentVariables["FOO"] = "BAR";
+            
+            using (var p = launcher.LaunchProcess(si, jobObject))
+            {
+                var output = File.ReadAllText(tempFile);
+                Assert.Contains("BAR", output);
+            }
+        }
+
+        [Fact]
+        public void StartsProcessWithSpecifiedWorkingDirectory()
+        {
+            var tempFile = Path.Combine(tempDirectory, Guid.NewGuid().ToString());
+
+            var si = new CreateProcessStartInfo("cmd.exe", string.Format(@"/K cd > {0}", tempFile));
+            si.WorkingDirectory = tempDirectory;
+
+            using (var p = launcher.LaunchProcess(si, jobObject))
+            {
+                var output = File.ReadAllText(tempFile);
+                Assert.Contains(tempDirectory, output);
+            }
+        }
+
+        [Fact]
+        public void CanGetExitCodeFromCompletedProcess()
+        {
+            var si = new CreateProcessStartInfo("cmd.exe", @"/C sleep 1s && exit 0");
+            si.WorkingDirectory = tempDirectory;
+
+            using (var p = launcher.LaunchProcess(si, jobObject))
+            {
+                p.WaitForExit();
+                Assert.Equal(0, p.ExitCode);
+            }
+        }
+
+        [Fact]
         public void ProcessLaunchFailures_ThrowsAnException()
         {
-            ProcessStartInfo si = new ProcessStartInfo("DoesNotExist.exe");
+            var si = new CreateProcessStartInfo("DoesNotExist.exe");
 
             Assert.Throws<ProcessLauncherException>(() => launcher.LaunchProcess(si, jobObject));
         }
@@ -99,7 +156,7 @@
         [Fact]
         public void ProcessLaunchFailures_ThrownExceptionIncludesErrorDetails()
         {
-            ProcessStartInfo si = new ProcessStartInfo("DoesNotExist.exe");
+            var si = new CreateProcessStartInfo("DoesNotExist.exe");
 
             var ex = Record.Exception(() => launcher.LaunchProcess(si, jobObject));
             ProcessLauncherException processException = (ProcessLauncherException)ex;
@@ -111,7 +168,7 @@
         [Fact]
         public void ProcessLaunchFailures_ThrownExceptionIncludesRemoteStack()
         {
-            ProcessStartInfo si = new ProcessStartInfo("DoesNotExist.exe");
+            var si = new CreateProcessStartInfo("DoesNotExist.exe");
 
             var ex = Record.Exception(() => launcher.LaunchProcess(si, jobObject));
             ProcessLauncherException processException = (ProcessLauncherException)ex;
@@ -131,7 +188,7 @@
 
                 var tempFile = Path.Combine(tempDirectory, Guid.NewGuid().ToString());
 
-                ProcessStartInfo si = new ProcessStartInfo("cmd.exe", string.Format(@"/K echo %USERNAME% > {0}", tempFile))
+                var si = new CreateProcessStartInfo("cmd.exe", string.Format(@"/K echo %USERNAME% > {0}", tempFile))
                 {
                     UserName = testUserName,
                     Password = testUser.Password.ToSecureString()

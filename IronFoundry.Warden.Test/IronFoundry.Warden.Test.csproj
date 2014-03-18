@@ -35,10 +35,11 @@
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="ContainerHandleTests.cs" />
-    <Compile Include="ContainerHost\MessageTransportTest.cs" />
-    <Compile Include="ContainerHost\MessagingClientTest.cs" />
+    <Compile Include="Messaging\MessageTransportTest.cs" />
+    <Compile Include="Messaging\MessagingClientTest.cs" />
+    <Compile Include="Messaging\SecureStringJsonConverterTest.cs" />
     <Compile Include="TestSupport\FactAdminRequired.cs" />
-    <Compile Include="ContainerHost\MessageDispatcherTest.cs" />
+    <Compile Include="Messaging\MessageDispatcherTest.cs" />
     <Compile Include="ExternalProcessContainersTest.cs" />
     <Compile Include="JobObjectTests.cs" />
     <Compile Include="LocalPrincipalManagerTests.cs" />

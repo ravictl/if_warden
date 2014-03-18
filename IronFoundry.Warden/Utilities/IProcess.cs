@@ -20,5 +20,6 @@ namespace IronFoundry.Warden.Utilities
         event EventHandler Exited;
 
         void Kill();
+        void WaitForExit();
     }
 }

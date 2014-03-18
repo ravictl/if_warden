@@ -74,23 +74,26 @@ namespace IronFoundry.Warden.ContainerHost
         {
             //Debug.Assert(false);
 
-            var createParams = request.@params;
-            
-            var startInfo = createParams.ToProcessStartInfo();
-            startInfo.RedirectStandardError = true;
-            startInfo.RedirectStandardOutput = true;
-
+            var createProcessStartInfo = request.@params;
             var processContext = new ProcessContext();
+            var process = new Process();
 
-            Process process = Process.Start(startInfo);
-
+            process.StartInfo = ToProcessStartInfo(createProcessStartInfo);
             process.ErrorDataReceived += processContext.HandleErrorData;
             process.OutputDataReceived += processContext.HandleOutputData;
             process.Exited += processContext.HandleProcessExit;
 
+            process.EnableRaisingEvents = true;
+
+            process.Start();
+
             process.BeginErrorReadLine();
             process.BeginOutputReadLine();
-            process.EnableRaisingEvents = true;
+            
+            // Through much debugging we discovered that the combination of the ruby.exe process
+            // and the DEA staging scripts require a new-line in order to run the script successfully.
+            // This is a total hack and we should determine if we can work around the problem another way.
+            process.StandardInput.WriteLine(Environment.NewLine);
             
             processContexts[process.Id] = processContext;
 
@@ -126,5 +129,35 @@ namespace IronFoundry.Warden.ContainerHost
                 throw new Exception("The process doesn't exist.");
             }
         }
+
+        private static ProcessStartInfo ToProcessStartInfo(CreateProcessStartInfo createProcessStartInfo)
+        {
+            var si = new ProcessStartInfo()
+            {
+                UseShellExecute = false,
+                CreateNoWindow = true,
+                LoadUserProfile = false,
+                RedirectStandardError = true,
+                RedirectStandardOutput = true,
+                RedirectStandardInput = true,
+                WorkingDirectory = createProcessStartInfo.WorkingDirectory,
+                FileName = createProcessStartInfo.FileName,
+                Arguments = createProcessStartInfo.Arguments,
+                UserName = createProcessStartInfo.UserName,
+                Password = createProcessStartInfo.Password,
+            };
+
+            if (createProcessStartInfo.EnvironmentVariables.Count > 0)
+            {
+                si.EnvironmentVariables.Clear();
+                foreach (string key in createProcessStartInfo.EnvironmentVariables.Keys)
+                {
+                    si.EnvironmentVariables[key] = createProcessStartInfo.EnvironmentVariables[key];
+                }
+            }
+
+            return si;
+        }
+
     }
 }

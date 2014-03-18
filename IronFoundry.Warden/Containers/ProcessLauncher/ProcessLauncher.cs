@@ -9,14 +9,31 @@ using IronFoundry.Warden.Utilities;
 
 namespace IronFoundry.Warden.Containers
 {
-    public class ProcessLauncher
+    public class ProcessLauncher : IDisposable
     {
         string hostExe = "IronFoundry.Warden.ContainerHost.exe";
         Process hostProcess;
         MessageTransport messageTransport;
         MessagingClient messagingClient;
 
-        public IProcess LaunchProcess(CreateProcessStartInfo si, JobObject jobObject)
+        public int HostProcessId
+        {
+            get { return hostProcess != null ? hostProcess.Id : 0; }
+        }
+
+        public virtual void Dispose()
+        {
+            if (hostProcess != null)
+            {
+                if (!hostProcess.HasExited)
+                    hostProcess.Kill();
+
+                hostProcess.Dispose();
+                hostProcess = null;
+            }
+        }
+
+        public virtual IProcess LaunchProcess(CreateProcessStartInfo si, JobObject jobObject)
         {
             if (hostProcess == null)
             {

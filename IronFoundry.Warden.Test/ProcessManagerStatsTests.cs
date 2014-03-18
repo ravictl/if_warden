@@ -9,7 +9,7 @@ using NSubstitute;
 
 namespace IronFoundry.Warden.Test
 {
-    public class ProcessManagerTests
+    public class ProcessManagerStatsTests
     {
         public class WhenManagingNoProcess
         {

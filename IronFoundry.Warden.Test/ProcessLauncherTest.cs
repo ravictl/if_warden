@@ -1,32 +1,22 @@
 ﻿namespace IronFoundry.Warden.Containers
 {
-    using IronFoundry.Warden.Test;
-    using IronFoundry.Warden.PInvoke;
     using System;
-    using System.Collections.Generic;
     using System.Diagnostics;
-    using System.DirectoryServices.AccountManagement;
     using System.IO;
-    using System.Linq;
-    using System.Text;
-    using System.Threading.Tasks;
-    using System.Web.Security;
-    using Xunit;
-    using System.Security;
     using System.Security.AccessControl;
-    using IronFoundry.Warden.Test.TestSupport;
+    using IronFoundry.Warden.PInvoke;
     using IronFoundry.Warden.Shared.Messaging;
+    using IronFoundry.Warden.Test;
+    using IronFoundry.Warden.Test.TestSupport;
+    using Xunit;
 
-
- 
-
-    public class ExternalProcessContainersTest : IDisposable
+    public class ProcessLauncherTest : IDisposable
     {
         JobObject jobObject = new JobObject();
         ProcessLauncher launcher = new ProcessLauncher();
         string tempDirectory;
 
-        public ExternalProcessContainersTest()
+        public ProcessLauncherTest()
         {
             tempDirectory = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString());
             Directory.CreateDirectory(tempDirectory);
@@ -36,7 +26,8 @@
         {
             jobObject.TerminateProcesses();
             jobObject.Dispose();
-            jobObject = null;
+
+            launcher.Dispose();
 
             Directory.Delete(tempDirectory, true);
         }
@@ -109,7 +100,7 @@
 
             var si = new CreateProcessStartInfo("cmd.exe", string.Format(@"/K echo %FOO% > {0}", tempFile));
             si.EnvironmentVariables["FOO"] = "BAR";
-            
+
             using (var p = launcher.LaunchProcess(si, jobObject))
             {
                 var output = File.ReadAllText(tempFile);
@@ -129,6 +120,12 @@
             {
                 var output = File.ReadAllText(tempFile);
                 Assert.Contains(tempDirectory, output);
+
+                // Need to kill process and wait for it's exit before allowing
+                // cleanup of temporary directories, otherwise the temp directory
+                // may still be in use.
+                p.Kill();
+                p.WaitForExit();
             }
         }
 
@@ -198,40 +195,62 @@
                 {
                     var output = File.ReadAllText(tempFile);
                     Assert.Contains(testUserName, output);
-                    p.Kill();
                 }
             }
         }
 
-        private void AddFileSecurity(string file, string account, FileSystemRights rights, AccessControlType access)
+        [Fact]
+        public void WhenHostProcessIsNotRunning_ReturnsInvalidProcessId()
         {
-
-            var fileSecurity = File.GetAccessControl(file);
-
-            fileSecurity.AddAccessRule(new FileSystemAccessRule(account, rights, access));
-
-            File.SetAccessControl(file, fileSecurity);
+            Assert.Equal(0, launcher.HostProcessId);
         }
 
-        // Can send stdinput to remote process
+        [Fact]
+        public void AfterLaunchingProcess_ReturnsHostProcessId()
+        {
+            var si = new CreateProcessStartInfo("cmd.exe");
 
-        //[Fact]
-        //public void CanGetStdoutFromRemoteProcess()
-        //{
-        //    ProcessStartInfo si = new ProcessStartInfo("cmd.exe", @"/K echo Boomerang")
-        //    {
-        //        RedirectStandardOutput = true,
-        //    };
+            using (var p = launcher.LaunchProcess(si, jobObject))
+            {
+                Assert.NotEqual(0, launcher.HostProcessId);
+                Assert.NotNull(Process.GetProcessById(launcher.HostProcessId));
+            }
+        }
 
-        //    using (var p = launcher.LaunchProcess(si, jobObject))
-        //    {
-        //        StringBuilder builder = new StringBuilder();
+        [Fact]
+        public void DisposeShouldShutdownHostProcess()
+        {
+            var si = new CreateProcessStartInfo("cmd.exe");
+            var p = launcher.LaunchProcess(si, jobObject);
+            p.Dispose();
 
-        //        var output = p.StandardOutput.ReadLine();
-        //        Assert.Contains("Boomerang", output);
-        //    }
-        //}
+            var hostProcess = Process.GetProcessById(launcher.HostProcessId);
 
-        // Can get errorinfo from remote process
+            launcher.Dispose();
+
+            Assert.True(hostProcess.HasExited);
+        }
+
+        [Fact]
+        public void DisposeShouldNotThrowWhenHostProcessDies()
+        {
+            var si = new CreateProcessStartInfo("cmd.exe");
+            var p = launcher.LaunchProcess(si, jobObject);
+            p.Dispose();
+
+            var hostProcess = Process.GetProcessById(launcher.HostProcessId);
+            hostProcess.Kill();
+
+            var ex = Record.Exception(() => launcher.Dispose());
+
+            Assert.Null(ex);
+        }
+
+        private void AddFileSecurity(string file, string account, FileSystemRights rights, AccessControlType access)
+        {
+            var fileSecurity = File.GetAccessControl(file);
+            fileSecurity.AddAccessRule(new FileSystemAccessRule(account, rights, access));
+            File.SetAccessControl(file, fileSecurity);
+        }
     }
 }

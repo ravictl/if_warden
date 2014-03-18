@@ -4,24 +4,31 @@
     using System.Collections.Concurrent;
     using System.Collections.Generic;
     using System.Diagnostics;
-    using Containers;
     using System.Linq;
+    using Containers;
+    using IronFoundry.Warden.Shared.Messaging;
     using NLog;
 
-    public class ProcessManager
+    public class ProcessManager : IDisposable
     {
+        private readonly JobObject jobObject = new JobObject();
         private readonly Logger log = LogManager.GetCurrentClassLogger();
         private readonly ConcurrentDictionary<int, IProcess> processes = new ConcurrentDictionary<int, IProcess>();
+        private readonly ProcessLauncher processLauncher;
         private readonly string containerUser;
 
         private readonly Func<Process, bool> processMatchesUser;
 
-        public ProcessManager(string containerUser)
+        public ProcessManager(string containerUser) : this(new ProcessLauncher(), containerUser)
+        {
+        }
+
+        public ProcessManager(ProcessLauncher processLauncher, string containerUser)
         {
             if (containerUser == null)
-            {
                 throw new ArgumentNullException("containerUser");
-            }
+
+            this.processLauncher = processLauncher;
             this.containerUser = containerUser;
 
             this.processMatchesUser = (process) =>
@@ -35,7 +42,6 @@
         {
             get { return processes.Count > 0; }
         }
-
 
         public void AddProcess(IProcess process)
         {
@@ -53,6 +59,27 @@
         public void AddProcess(Process process)
         {
             AddProcess(new RealProcessWrapper(process));
+        }
+
+        public bool ContainsProcess(int processId)
+        {
+            return processes.ContainsKey(processId);
+        }
+
+        public IProcess CreateProcess(CreateProcessStartInfo startInfo)
+        {
+            var process = processLauncher.LaunchProcess(startInfo, jobObject);
+            if (!processes.TryAdd(process.Id, process))
+            {
+                throw new InvalidOperationException("A process with the id " + process.Id + " is already being tracked.");
+            }
+            return process;
+        }
+
+        public void Dispose()
+        {
+            jobObject.Dispose();
+            processLauncher.Dispose();
         }
 
         public void RestoreProcesses()

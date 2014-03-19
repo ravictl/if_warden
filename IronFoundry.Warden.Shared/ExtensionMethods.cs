@@ -1,3 +1,4 @@
+using System;
 using System.Linq;
 using System.Runtime.InteropServices;
 using System.Security.Cryptography;
@@ -39,25 +40,22 @@ namespace System
     }
 }
 
-namespace System.Security
+public static class SecureStringExtensionMethod
 {
-    public static class SecureStringExtensionMethod
+    public static string ToUnsecureString(this System.Security.SecureString secureString)
     {
-        public static string ToUnsecureString(this SecureString secureString)
-        {
-            if (secureString == null)
-                throw new ArgumentNullException("securePassword");
+        if (secureString == null)
+            throw new ArgumentNullException("securePassword");
 
-            IntPtr unmanagedString = IntPtr.Zero;
-            try
-            {
-                unmanagedString = Marshal.SecureStringToGlobalAllocUnicode(secureString);
-                return Marshal.PtrToStringUni(unmanagedString);
-            }
-            finally
-            {
-                Marshal.ZeroFreeGlobalAllocUnicode(unmanagedString);
-            }
+        IntPtr unmanagedString = IntPtr.Zero;
+        try
+        {
+            unmanagedString = Marshal.SecureStringToGlobalAllocUnicode(secureString);
+            return Marshal.PtrToStringUni(unmanagedString);
+        }
+        finally
+        {
+            Marshal.ZeroFreeGlobalAllocUnicode(unmanagedString);
         }
     }
 }

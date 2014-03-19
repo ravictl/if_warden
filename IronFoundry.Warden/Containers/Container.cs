@@ -5,6 +5,7 @@
     using System.Diagnostics;
     using System.Net;
     using System.Threading;
+    using IronFoundry.Warden.Shared.Messaging;
     using NLog;
     using Protocol;
     using Utilities;
@@ -14,8 +15,8 @@
         private readonly Logger log = LogManager.GetCurrentClassLogger();
         private readonly ReaderWriterLockSlim rwlock = new ReaderWriterLockSlim();
         private readonly ContainerHandle handle;
-        private readonly ContainerUser user;
-        private readonly ContainerDirectory directory;
+        private readonly IContainerUser user;
+        private readonly IContainerDirectory directory;
         private readonly ProcessManager processManager;
 
         private ContainerPort port;
@@ -23,35 +24,40 @@
 
         public static Container Restore(string handle, ContainerState containerState)
         {
-            return new Container(handle, containerState);
-        }
-
-        /// <summary>
-        /// Used for restore.
-        /// </summary>
-        private Container(string handle, ContainerState containerState)
-        {
             if (handle.IsNullOrWhiteSpace())
             {
                 throw new ArgumentNullException("handle");
             }
-            this.handle = new ContainerHandle(handle);
+
+            var containerHandle = new ContainerHandle(handle);
 
             if (containerState == null)
             {
                 throw new ArgumentNullException("containerState");
             }
-            this.state = containerState;
 
-            this.user = new ContainerUser(handle);
-            this.directory = new ContainerDirectory(this.handle, this.user);
+            var user = new ContainerUser(handle);
+            var directory = new ContainerDirectory(containerHandle, user);
 
-            this.processManager = new ProcessManager(this.user);
+            var container = new Container(containerHandle, user, directory);
+            container.State = containerState;
 
-            if (this.state == ContainerState.Active)
+            if (container.state == ContainerState.Active)
             {
-                this.RestoreProcesses();
+                container.RestoreProcesses();
             }
+
+            return container;
+        }
+
+        public Container(ContainerHandle handle, IContainerUser user, IContainerDirectory directory)
+        {
+            this.handle = handle;
+            this.user = user;
+            this.directory = directory;
+            this.state = ContainerState.Born;
+
+            this.processManager = new ProcessManager(this.user.UserName);
         }
 
         public Container()
@@ -61,7 +67,7 @@
             this.directory = new ContainerDirectory(this.handle, this.user, true);
             this.state = ContainerState.Born;
 
-            this.processManager = new ProcessManager(this.user);
+            this.processManager = new ProcessManager(this.user.UserName);
         }
 
         public NetworkCredential GetCredential()
@@ -74,7 +80,7 @@
             get { return handle; }
         }
 
-        public ContainerUser User
+        public IContainerUser User
         {
             get { return user; }
         }
@@ -82,9 +88,10 @@
         public ContainerState State
         {
             get { return state; }
+            private set { state = value; }
         }
 
-        public ContainerDirectory Directory
+        public IContainerDirectory Directory
         {
             get { return directory; }
         }
@@ -163,7 +170,7 @@
 
                 if (arg.Contains("@ROOT@"))
                 {
-                    rv = arg.Replace("@ROOT@", this.Directory).ToWinPathString();
+                    rv = arg.Replace("@ROOT@", this.Directory.FullName).ToWinPathString();
                 }
                 else
                 {
@@ -179,7 +186,7 @@
             string pathTmp = path.Trim();
             if (pathTmp.StartsWith("@ROOT@"))
             {
-                return pathTmp.Replace("@ROOT@", this.Directory).ToWinPathString();
+                return pathTmp.Replace("@ROOT@", this.Directory.FullName).ToWinPathString();
             }
             else
             {
@@ -189,7 +196,7 @@
 
         public TempFile TempFileInContainer(string extension)
         {
-            return new TempFile(this.Directory, extension);
+            return new TempFile(this.Directory.FullName, extension);
         }
 
         public static void CleanUp(string handle)
@@ -231,6 +238,11 @@
         private void RestoreProcesses()
         {
             processManager.RestoreProcesses();
+        }
+
+        public virtual IProcess CreateProcess(CreateProcessStartInfo startInfo)
+        {
+            return null;
         }
 
         private void ChangeState(ContainerState containerState)

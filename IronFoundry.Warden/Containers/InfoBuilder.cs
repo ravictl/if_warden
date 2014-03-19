@@ -20,7 +20,7 @@
         public InfoResponse GetInfoResponse()
         {
             var hostIp = IPUtilities.GetLocalIPAddress().ToString();
-            var info = new InfoResponse(hostIp, hostIp, container.Directory, container.State);
+            var info = new InfoResponse(hostIp, hostIp, container.Directory.FullName, container.State);
 
             var stats = container.GetProcessStatistics();
             info.CpuStatInfo.Usage = (ulong)stats.TotalProcessorTime.Ticks;

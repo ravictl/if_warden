@@ -66,7 +66,7 @@
             return processes.ContainsKey(processId);
         }
 
-        public IProcess CreateProcess(CreateProcessStartInfo startInfo)
+        public virtual IProcess CreateProcess(CreateProcessStartInfo startInfo)
         {
             var process = processLauncher.LaunchProcess(startInfo, jobObject);
             if (!processes.TryAdd(process.Id, process))

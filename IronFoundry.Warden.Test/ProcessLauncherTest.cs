@@ -132,7 +132,7 @@
         [Fact]
         public void CanGetExitCodeFromCompletedProcess()
         {
-            var si = new CreateProcessStartInfo("cmd.exe", @"/C sleep 1s && exit 0");
+            var si = new CreateProcessStartInfo("cmd.exe", @"/S /C ""ping 127.0.0.1 -n 1 && exit""");
             si.WorkingDirectory = tempDirectory;
 
             using (var p = launcher.LaunchProcess(si, jobObject))

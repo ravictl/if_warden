@@ -28,7 +28,7 @@ namespace IronFoundry.Warden.Tasks.Test
 
             directory = Substitute.For<IContainerDirectory>();
             process = Substitute.For<IProcess>();
-            container = Substitute.For<Container>(handle, user, directory);
+            container = Substitute.For<Container>(handle, user, directory, new ProcessManager(user.UserName));
         }
 
         [Fact]
@@ -55,7 +55,6 @@ namespace IronFoundry.Warden.Tasks.Test
             });
 
             var cmd = new TestableProcessCommand(container, "C:\\temp", "some.exe", "some args", true);
-            
             cmd.Execute();
 
             Assert.Equal("TestUser", si.UserName);
@@ -68,7 +67,6 @@ namespace IronFoundry.Warden.Tasks.Test
             container.CreateProcess(null).ReturnsForAnyArgs(process);
             
             var cmd = new TestableProcessCommand(container, "C:\\temp", "some.exe", "some args");
-
             cmd.Execute();
 
             process.Received().WaitForExit();            
@@ -81,7 +79,6 @@ namespace IronFoundry.Warden.Tasks.Test
             process.ExitCode.Returns(100);
 
             var cmd = new TestableProcessCommand(container, "C:\\temp", "some.exe", "some args");
-
             var result = cmd.Execute();
 
             Assert.Equal(100, result.ExitCode);

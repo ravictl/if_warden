@@ -12,6 +12,8 @@
 
     public class Container
     {
+        private const string TEMP_PATH = "tmp";
+
         private readonly Logger log = LogManager.GetCurrentClassLogger();
         private readonly ReaderWriterLockSlim rwlock = new ReaderWriterLockSlim();
         private readonly ContainerHandle handle;
@@ -39,7 +41,7 @@
             var user = new ContainerUser(handle);
             var directory = new ContainerDirectory(containerHandle, user);
 
-            var container = new Container(containerHandle, user, directory);
+            var container = new Container(containerHandle, user, directory, new ProcessManager(user.UserName));
             container.State = containerState;
 
             if (container.state == ContainerState.Active)
@@ -50,14 +52,13 @@
             return container;
         }
 
-        public Container(ContainerHandle handle, IContainerUser user, IContainerDirectory directory)
+        public Container(ContainerHandle handle, IContainerUser user, IContainerDirectory directory, ProcessManager manager)
         {
             this.handle = handle;
             this.user = user;
             this.directory = directory;
             this.state = ContainerState.Born;
-
-            this.processManager = new ProcessManager(this.user.UserName);
+            this.processManager = manager;
         }
 
         public Container()
@@ -242,7 +243,43 @@
 
         public virtual IProcess CreateProcess(CreateProcessStartInfo startInfo)
         {
-            return null;
+
+            if (startInfo.UserName != null)
+            {
+                startInfo.EnvironmentVariables.Clear();
+                CopyEnvVariableTo(startInfo.EnvironmentVariables, new[] {
+                    "Path", 
+                    "SystemRoot", 
+                    "SystemDrive",
+                    "windir",
+                    "PSModulePath",
+                    "ProgramData",                    
+                    "PATHEXT",
+                });
+
+                var tmpDir = System.IO.Path.Combine(this.directory.FullName, TEMP_PATH);
+
+                startInfo.EnvironmentVariables["APPDATA"] = tmpDir;
+                startInfo.EnvironmentVariables["LOCALAPPDATA"] = tmpDir;
+                startInfo.EnvironmentVariables["USERPROFILE"] = tmpDir;
+                startInfo.EnvironmentVariables["TMP"] = tmpDir;
+                startInfo.EnvironmentVariables["TEMP"] = tmpDir;
+            }
+            
+            return processManager.CreateProcess(startInfo);
+        }
+
+        private void CopyEnvVariableTo(Dictionary<string, string> target, string[] sourceKeys)
+        {
+            var environment = Environment.GetEnvironmentVariables();
+
+            foreach (var key in sourceKeys)
+            {
+                if (environment.Contains(key))
+                {
+                    target[key.ToString()] = environment[key].ToString();
+                }
+            }
         }
 
         private void ChangeState(ContainerState containerState)

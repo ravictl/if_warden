@@ -252,12 +252,12 @@ namespace IronFoundry.Warden.Containers
 
             public TimeSpan TotalProcessorTime
             {
-                get { return process.TotalProcessorTime; }
+                get { return  process.HasExited ? TimeSpan.Zero : process.TotalProcessorTime; }
             }
 
             public TimeSpan TotalUserProcessorTime
             {
-                get { return process.UserProcessorTime; }
+                get { return  process.HasExited ? TimeSpan.Zero : process.UserProcessorTime; }
             }
 
             public void Kill()
@@ -276,7 +276,10 @@ namespace IronFoundry.Warden.Containers
 
             public long WorkingSet
             {
-                get { return process.WorkingSet64; }
+                get 
+                { 
+                    return process.HasExited ? 0 : process.WorkingSet64; 
+                }
             }
 
             public void Dispose()

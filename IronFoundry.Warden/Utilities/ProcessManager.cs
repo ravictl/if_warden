@@ -19,7 +19,8 @@
 
         private readonly Func<Process, bool> processMatchesUser;
 
-        public ProcessManager(string containerUser) : this(new ProcessLauncher(), containerUser)
+        public ProcessManager(string containerUser)
+            : this(new ProcessLauncher(), containerUser)
         {
         }
 
@@ -101,12 +102,16 @@
 
         public void StopProcesses()
         {
-            // TODO once job objects are working, we shouldn't need this.
             var processList = processes.Values.ToListOrNull();
-            processList.Foreach(log, (p) => !p.HasExited, (p) => p.Kill());
-            processList.Foreach(log, (p) => RemoveProcess(p.Id));
+            Debug.Assert(processList.All(p => {
+                bool isInJob = false;
+                IronFoundry.Warden.PInvoke.NativeMethods.IsProcessInJob(p.Handle, jobObject.Handle, out isInJob);
+                return isInJob;
+            }));
 
-            GetMatchingUserProcesses().Foreach(log, p => p.Kill());
+            jobObject.TerminateProcesses();
+            
+            processList.Clear();
         }
 
         public IEnumerable<Process> GetMatchingUserProcesses()

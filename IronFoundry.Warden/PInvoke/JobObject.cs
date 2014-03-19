@@ -21,6 +21,7 @@
         public static extern bool AssignProcessToJobObject(SafeHandle jobHandle, IntPtr processHandle);
 
         [DllImport("kernel32.dll", SetLastError = true)]
+        [return: MarshalAs(UnmanagedType.Bool)]
         public static extern bool TerminateJobObject(SafeHandle jobHandle, uint exitCode);
     }
 }

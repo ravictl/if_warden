@@ -51,5 +51,10 @@
             SidTypeUnknown,
             SidTypeComputer
         }
+
+        public enum ProcessExitCode : uint
+        {
+            StillActive = 259u
+        }
     }
 }

@@ -84,6 +84,24 @@ namespace IronFoundry.Warden.Tasks.Test
             Assert.Equal(100, result.ExitCode);
         }
 
+        [Fact]
+        public void SetsTheWorkingDirectoryInStartInfo()
+        {
+            container.GetCredential().Returns(new System.Net.NetworkCredential("TestUser", "TestUserPassword"));
+
+            CreateProcessStartInfo si = null;
+            container.CreateProcess(null).ReturnsForAnyArgs(c =>
+            {
+                si = c.Arg<CreateProcessStartInfo>();
+                return process;
+            });
+
+            var cmd = new TestableProcessCommand(container, "C:\\temp", "some.exe", "some args", true);
+            cmd.Execute();
+
+            Assert.Equal("C:\\temp", si.WorkingDirectory);
+        }
+
         private class TestableProcessCommand : ProcessCommand
         {
             private string workingDirectory;

@@ -50,6 +50,8 @@ using Utilities;
             log.Trace("Running process{0}: {1} {2}", shouldImpersonate ? " (as warden user)" : String.Empty,  executable, processArguments);
 
             var si = new CreateProcessStartInfo(executable, processArguments);
+            si.WorkingDirectory = workingDirectory;
+
             if (shouldImpersonate)
             {
                 var impersonationCredential = container.GetCredential();

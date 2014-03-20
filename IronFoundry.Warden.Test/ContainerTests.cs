@@ -26,7 +26,7 @@ namespace IronFoundry.Warden.Test
             containerDirectory.FullName.Returns(containerDirectoryPath);
 
             returnedProcess = Substitute.For<IProcess>();
-            processManager = Substitute.For<ProcessManager>("TestUserName");
+            processManager = Substitute.For<ProcessManager>("TestHandle");
             container = new Container(containerHandle, containerUser, containerDirectory, processManager);
         }
 
@@ -63,7 +63,7 @@ namespace IronFoundry.Warden.Test
             Assert.Equal(si.Arguments, capturedStartInfo.Arguments);
         }
 
-
+        [Fact]
         public void WhenCreatingProcessWithoutImpersonation_DoesNotReplaceEnvironment()
         {
             CreateProcessStartInfo capturedStartInfo = null;
@@ -81,6 +81,7 @@ namespace IronFoundry.Warden.Test
             Assert.Equal("Alpha", capturedStartInfo.EnvironmentVariables["One"]);
         }
 
+        [Fact]
         public void WhenCreatingProcessWithImpersonation_ClearsExistingEnvironment()
         {
             CreateProcessStartInfo capturedStartInfo = null;
@@ -152,6 +153,28 @@ namespace IronFoundry.Warden.Test
             var expectedPath = System.IO.Path.Combine(containerDirectoryPath, "tmp");
 
             Assert.Equal(expectedPath, capturedStartInfo.EnvironmentVariables[environmentKey]);
+        }
+
+        [Fact]
+        public void WhenDestroyingContainer_TerminatesRunningProcesses()
+        {
+            processManager.When(x => x.StopProcesses()).DoNotCallBase();
+            processManager.When(x => x.Dispose()).DoNotCallBase();
+
+            container.Destroy();
+
+            processManager.Received().StopProcesses();
+        }
+
+        [Fact]
+        public void WhenDestoryingContainer_DisposesProcessManager()
+        {
+            processManager.When(x => x.StopProcesses()).DoNotCallBase();
+            processManager.When(x => x.Dispose()).DoNotCallBase();
+
+            container.Destroy();
+
+            processManager.Received().Dispose();
         }
     }
 }

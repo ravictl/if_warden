@@ -13,7 +13,7 @@ namespace IronFoundry.Warden.Test
         public void StoppingProcessManager_StopsProcesses()
         {
             var launcher = new ProcessLauncher();
-            var manager = new ProcessManager(new JobObject(), launcher, "TestUser");
+            var manager = new ProcessManager(new JobObject(), launcher);
 
             var si = new CreateProcessStartInfo("cmd.exe");
             using (var process = manager.CreateProcess(si))
@@ -30,5 +30,12 @@ namespace IronFoundry.Warden.Test
             }
         }
 
+        [Fact]
+        public void ProcessManagerCreatesNamedJobObject()
+        {
+            var manager = new ProcessManager("SomeHandle");
+            var jobHandle = new SafeJobObjectHandle(NativeMethods.OpenJobObject(NativeMethods.JobObjectAccessRights.AllAccess, false, "SomeHandle"));
+            Assert.False(jobHandle.IsInvalid);
+        }
     }
 }

@@ -26,7 +26,7 @@ namespace IronFoundry.Warden.Test
                 });
                 jobObject.GetProcessIds().Returns(new int[0]);
 
-                var manager = Substitute.For<ProcessManager>(jobObject, new ProcessLauncher(), "TestUser");
+                var manager = Substitute.For<ProcessManager>(jobObject, new ProcessLauncher());
                 
                 stats = manager.GetProcessStats();
             }
@@ -89,7 +89,7 @@ namespace IronFoundry.Warden.Test
                 process.PagedMemoryBytes.Returns(expectedPagedMemoryBytes);
                 process.WorkingSet.Returns(expectedWorkingSet);
 
-                var manager = Substitute.For<ProcessManager>(jobObject, new ProcessLauncher(), "TestUser");
+                var manager = Substitute.For<ProcessManager>(jobObject, new ProcessLauncher());
                 manager.GetProcessById(1234).Returns(process);
 
                 stats = manager.GetProcessStats();
@@ -166,7 +166,7 @@ namespace IronFoundry.Warden.Test
                 });
                 jobObject.GetProcessIds().Returns(new int[] { 12, 34 });
 
-                var manager = Substitute.For<ProcessManager>(jobObject, new ProcessLauncher(), "TestUser");
+                var manager = Substitute.For<ProcessManager>(jobObject, new ProcessLauncher());
                 manager.GetProcessById(12).Returns(firstProcess);
                 manager.GetProcessById(34).Returns(secondProcess);
 

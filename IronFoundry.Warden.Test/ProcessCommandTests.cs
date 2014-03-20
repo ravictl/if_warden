@@ -28,7 +28,7 @@ namespace IronFoundry.Warden.Tasks.Test
 
             directory = Substitute.For<IContainerDirectory>();
             process = Substitute.For<IProcess>();
-            container = Substitute.For<Container>(handle, user, directory, new ProcessManager(user.UserName));
+            container = Substitute.For<Container>(handle, user, directory, new ProcessManager(handle));
         }
 
         [Fact]

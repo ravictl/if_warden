@@ -89,7 +89,7 @@ namespace IronFoundry.Warden.Test.ContainerHost
 
             inputSource.AddLine(@"{""jsonrpc"":""2.0"",""id"":1,""error"":{""code"":1,""message"":""foo-error""}}");
 
-            Assert.Same(tcs.Task, await Task.WhenAny(tcs.Task, Task.Delay(1000)));
+            Assert.Same(tcs.Task, await Task.WhenAny(tcs.Task, Task.Delay(1500)));
         }
 
         [Fact]

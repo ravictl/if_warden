@@ -11,42 +11,28 @@
 
     public class ProcessManager : IDisposable
     {
-        private readonly JobObject jobObject;
         private readonly Logger log = LogManager.GetCurrentClassLogger();
-        private readonly ConcurrentDictionary<int, IProcess> processes = new ConcurrentDictionary<int, IProcess>();
+        private readonly JobObject jobObject;
         private readonly ProcessLauncher processLauncher;
-        private readonly string containerUser;
 
-        private readonly Func<Process, bool> processMatchesUser;
-
-        public ProcessManager(string containerUser) : this(new JobObject(), new ProcessLauncher(), containerUser)
+        public ProcessManager(string handle) : this(new JobObject(handle), new ProcessLauncher())
         {
         }
 
-        public ProcessManager(JobObject jobObject, ProcessLauncher processLauncher, string containerUser)
+        public ProcessManager(JobObject jobObject, ProcessLauncher processLauncher)
         {
-            if (containerUser == null)
-                throw new ArgumentNullException("containerUser");
-
             this.jobObject = jobObject;
             this.processLauncher = processLauncher;
-            this.containerUser = containerUser;
-
-            this.processMatchesUser = (process) =>
-                {
-                    string processUser = process.GetUserName();
-                    return processUser == containerUser && !process.HasExited;
-                };
         }
 
         public bool HasProcesses
         {
-            get { return processes.Count > 0; }
+            get { return jobObject.GetProcessIds().Count() > 0; }
         }
 
         public bool ContainsProcess(int processId)
         {
-            return processes.ContainsKey(processId);
+            return jobObject.GetProcessIds().Contains(processId);
         }
 
         public virtual IProcess GetProcessById(int processId)
@@ -65,17 +51,10 @@
         public virtual IProcess CreateProcess(CreateProcessStartInfo startInfo)
         {
             var process = processLauncher.LaunchProcess(startInfo, jobObject);
-            if (!processes.TryAdd(process.Id, process))
-            {
-                throw new InvalidOperationException("A process with the id " + process.Id + " is already being tracked.");
-            }
-
-            process.Exited += process_Exited;
-
             return process;
         }
 
-        public void Dispose()
+        public virtual void Dispose()
         {
             jobObject.Dispose();
             processLauncher.Dispose();
@@ -83,58 +62,12 @@
 
         public void RestoreProcesses()
         {
-            GetMatchingUserProcesses().Foreach(log,
-                (p) =>
-                {
-                    var wrappedProcess = new RealProcessWrapper(p);
-                    if (processes.TryAdd(wrappedProcess.Id, wrappedProcess))
-                    {
-                        log.Trace("Added process with PID '{0}' to container with user '{1}'", wrappedProcess.Id, containerUser);
-                    }
-                    else
-                    {
-                        log.Trace("Could NOT add process with PID '{0}' to container with user '{1}'", wrappedProcess.Id, containerUser);
-                    }
-                });
+           // Should restore just by using same named JobObject, if there are any.
         }
 
-        public void StopProcesses()
+        public virtual void StopProcesses()
         {
-            var processList = processes.Values.ToListOrNull();
-            Debug.Assert(processList.All(p => {
-                bool isInJob = false;
-                IronFoundry.Warden.PInvoke.NativeMethods.IsProcessInJob(p.Handle, jobObject.Handle, out isInJob);
-                return isInJob;
-            }));
-
             jobObject.TerminateProcesses();
-            
-            processList.Clear();
-        }
-
-        public IEnumerable<Process> GetMatchingUserProcesses()
-        {
-            var allProcesses = Process.GetProcesses();
-            return allProcesses.Where(p => processMatchesUser(p));
-        }
-
-        private void process_Exited(object sender, EventArgs e)
-        {
-            var process = (IProcess)sender;
-            process.Exited -= process_Exited;
-
-            log.Trace("Process exited PID '{0}' exit code '{1}'", process.Id, process.ExitCode);
-
-            RemoveProcess(process.Id);
-        }
-
-        private void RemoveProcess(int pid)
-        {
-            IProcess removed;
-            if (processes.ContainsKey(pid) && !processes.TryRemove(pid, out removed))
-            {
-                log.Warn("Could not remove process '{0}' from collection!", pid);
-            }
         }
 
         public ProcessStats GetProcessStats()

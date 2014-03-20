@@ -42,7 +42,7 @@
             var user = new ContainerUser(handle);
             var directory = new ContainerDirectory(containerHandle, user);
 
-            var container = new Container(containerHandle, user, directory, new ProcessManager(user.UserName));
+            var container = new Container(containerHandle, user, directory, new ProcessManager(containerHandle));
             container.State = containerState;
 
             if (container.state == ContainerState.Active)
@@ -69,7 +69,7 @@
             this.directory = new ContainerDirectory(this.handle, this.user, true);
             this.state = ContainerState.Born;
 
-            this.processManager = new ProcessManager(this.user.UserName);
+            this.processManager = new ProcessManager(handle);
         }
 
         public NetworkCredential GetCredential()
@@ -213,7 +213,8 @@
             rwlock.EnterWriteLock();
             try
             {
-                processManager.StopProcesses(); // NB: do this first to unlock files.
+                processManager.StopProcesses();
+                processManager.Dispose();
 
                 if (port != null)
                 {

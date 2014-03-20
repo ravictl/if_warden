@@ -16,17 +16,21 @@ namespace IronFoundry.Warden.Utilities
         ProcessLauncher launcher;
         ProcessManager manager;
         IProcess process;
+        JobObject jobObject;
 
         public ProcessManagerStartProcessTest()
         {
             launcher = Substitute.For<ProcessLauncher>();
             process = Substitute.For<IProcess>();
             process.Id.Returns(100);
+
+            jobObject = Substitute.For<JobObject>();
+            jobObject.GetProcessIds().Returns(new[] { 100 });
             
             launcher.LaunchProcess(null, null).ReturnsForAnyArgs(process);
             launcher.When(x => x.Dispose()).DoNotCallBase();
 
-            manager = new ProcessManager(new JobObject(), launcher, "user");
+            manager = new ProcessManager(jobObject, launcher);
         }
 
         public void Dispose()
@@ -42,17 +46,6 @@ namespace IronFoundry.Warden.Utilities
 
             launcher.Received().LaunchProcess(si, Arg.Is<JobObject>(x => x != null));
             Assert.NotNull(createdProcess);
-        }
-
-        [Fact]
-        public void WhenDuplicateProcessId_Throws()
-        {
-            var si = new CreateProcessStartInfo("cmd.exe");
-            manager.CreateProcess(si);
-            
-            var ex = Record.Exception(() => manager.CreateProcess(si));
-
-            Assert.IsType<InvalidOperationException>(ex);
         }
 
         [Fact]

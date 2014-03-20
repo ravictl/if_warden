@@ -17,9 +17,29 @@
     {
         SafeJobObjectHandle handle;
 
-        public JobObject()
+        public JobObject() : this(null)
         {
-            handle = new SafeJobObjectHandle(NativeMethods.CreateJobObject(IntPtr.Zero, null));
+        }
+
+        public JobObject(string name) : this(name, false)
+        {
+        }
+
+        public JobObject(string name, bool openExisting)
+        {
+            if (openExisting)
+            {
+                handle = new SafeJobObjectHandle(NativeMethods.OpenJobObject(NativeMethods.JobObjectAccessRights.AllAccess, false, name));
+            }
+            else
+            {
+                handle = new SafeJobObjectHandle(NativeMethods.CreateJobObject(IntPtr.Zero, name));
+            }
+
+            if (handle.IsInvalid)
+            {
+                throw new Exception("Unable to create job object.");
+            }
         }
 
         public SafeJobObjectHandle Handle
@@ -72,13 +92,14 @@
             try
             {
                 infoPtr = Marshal.AllocHGlobal(infoSize);
+                uint returnedLength = 0;
 
                 if (!NativeMethods.QueryInformationJobObject(
                     handle,
                     NativeMethods.JobObjectInfoClass.JobObjectBasicAccountingInformation,
                     infoPtr,
                     infoSize,
-                    IntPtr.Zero))
+                    ref returnedLength))
                 {
                     var error = Marshal.GetLastWin32Error();
                     if (error != NativeMethods.ERROR_MORE_DATA)
@@ -100,14 +121,22 @@
             IntPtr infoPtr = IntPtr.Zero;
             try
             {
-                infoPtr = Marshal.AllocHGlobal(infoSize);
+                int numberOfAssignedProcessesOffset = Marshal.OffsetOf(typeof(NativeMethods.JobObjectBasicProcessIdList), "NumberOfAssignedProcesses").ToInt32();
+                int numberOfProcessIdsInListOffset = Marshal.OffsetOf(typeof(NativeMethods.JobObjectBasicProcessIdList), "NumberOfProcessIdsInList").ToInt32();
+                
+                infoPtr = Marshal.AllocHGlobal(infoSize * 5);
+
+                Marshal.WriteInt32(infoPtr, numberOfAssignedProcessesOffset, 5);
+                Marshal.WriteInt32(infoPtr, numberOfProcessIdsInListOffset, 0);
+
+                uint returnedLength = 0;
 
                 if (!NativeMethods.QueryInformationJobObject(
                     handle,
                     NativeMethods.JobObjectInfoClass.JobObjectBasicProcessIdList,
                     infoPtr,
                     infoSize,
-                    IntPtr.Zero))
+                    ref returnedLength))
                 {
                     var error = Marshal.GetLastWin32Error();
                     if (error != NativeMethods.ERROR_MORE_DATA)
@@ -115,6 +144,7 @@
                 }
 
                 var info = (NativeMethods.JobObjectBasicProcessIdList)Marshal.PtrToStructure(infoPtr, typeof(NativeMethods.JobObjectBasicProcessIdList));
+
                 return (int)info.NumberOfAssignedProcesses;
             }
             finally
@@ -143,12 +173,13 @@
                 Marshal.WriteInt32(infoPtr, numberOfAssignedProcessesOffset, numberOfProcessesInJob);
                 Marshal.WriteInt32(infoPtr, numberOfProcessIdsInListOffset, 0);
 
+                uint returnedLength = 0;
                 if (!NativeMethods.QueryInformationJobObject(
                     handle,
                     NativeMethods.JobObjectInfoClass.JobObjectBasicProcessIdList,
                     infoPtr,
                     infoSize,
-                    IntPtr.Zero))
+                    ref returnedLength))
                 {
                     var error = Marshal.GetLastWin32Error();
                     if (error != NativeMethods.ERROR_MORE_DATA)
@@ -175,5 +206,7 @@
             if (handle == null) { throw new ObjectDisposedException("JobObject"); }
             NativeMethods.TerminateJobObject(handle, 0);
         }
+
+      
     }
 }

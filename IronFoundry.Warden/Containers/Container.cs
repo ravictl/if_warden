@@ -3,6 +3,7 @@
     using System;
     using System.Collections.Generic;
     using System.Diagnostics;
+    using System.IO;
     using System.Net;
     using System.Threading;
     using IronFoundry.Warden.Shared.Messaging;
@@ -231,11 +232,6 @@
             }
         }
 
-        public void AddProcess(Process process, ResourceLimits rlimits)
-        {
-            processManager.AddProcess(process);
-        }
-
         private void RestoreProcesses()
         {
             processManager.RestoreProcesses();
@@ -243,7 +239,6 @@
 
         public virtual IProcess CreateProcess(CreateProcessStartInfo startInfo)
         {
-
             if (startInfo.UserName != null)
             {
                 startInfo.EnvironmentVariables.Clear();
@@ -253,11 +248,11 @@
                     "SystemDrive",
                     "windir",
                     "PSModulePath",
-                    "ProgramData",                    
+                    "ProgramData",
                     "PATHEXT",
                 });
 
-                var tmpDir = System.IO.Path.Combine(this.directory.FullName, TEMP_PATH);
+                var tmpDir = Path.Combine(this.directory.FullName, TEMP_PATH);
 
                 startInfo.EnvironmentVariables["APPDATA"] = tmpDir;
                 startInfo.EnvironmentVariables["LOCALAPPDATA"] = tmpDir;

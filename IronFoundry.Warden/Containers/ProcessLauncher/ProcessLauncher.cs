@@ -173,6 +173,16 @@ namespace IronFoundry.Warden.Containers
                 get { return TimeSpan.Zero; }
             }
 
+            public long PrivateMemoryBytes
+            {
+                get { return 0; }
+            }
+
+            public long PagedMemoryBytes
+            {
+                get { return 0; }
+            }
+
             public long WorkingSet
             {
                 get { return 0; }
@@ -272,6 +282,16 @@ namespace IronFoundry.Warden.Containers
                 {
                     handlers.Invoke(this, EventArgs.Empty);
                 }
+            }
+
+            public long PrivateMemoryBytes
+            {
+                get { return process.PrivateMemorySize64; }
+            }
+
+            public long PagedMemoryBytes
+            {
+                get { return process.PagedMemorySize64; }
             }
 
             public long WorkingSet

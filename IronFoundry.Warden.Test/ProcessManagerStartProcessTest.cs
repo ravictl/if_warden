@@ -26,7 +26,7 @@ namespace IronFoundry.Warden.Utilities
             launcher.LaunchProcess(null, null).ReturnsForAnyArgs(process);
             launcher.When(x => x.Dispose()).DoNotCallBase();
 
-            manager = new ProcessManager(launcher, "user");
+            manager = new ProcessManager(new JobObject(), launcher, "user");
         }
 
         public void Dispose()

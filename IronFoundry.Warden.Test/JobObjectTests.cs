@@ -1,9 +1,6 @@
 ﻿using System;
-using System.Collections.Generic;
 using System.Diagnostics;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
+using System.Threading;
 using Xunit;
 
 namespace IronFoundry.Warden.Containers
@@ -82,6 +79,133 @@ namespace IronFoundry.Warden.Containers
             jobObject.Dispose();
 
             Assert.Throws<ObjectDisposedException>(() => jobObject.TerminateProcesses());
+        }
+
+        public class WhenManagingNoProcesses : IDisposable
+        {
+            JobObject jobObject;
+
+            public WhenManagingNoProcesses()
+            {
+                jobObject = new JobObject();
+            }
+
+            public void Dispose()
+            {
+                jobObject.Dispose();
+            }
+
+            [Fact]
+            public void ReturnsDefaultCpuStatistics()
+            {
+                var stats = jobObject.GetCpuStatistics();
+
+                Assert.Equal(TimeSpan.Zero, stats.TotalKernelTime);
+                Assert.Equal(TimeSpan.Zero, stats.TotalUserTime);
+            }
+
+            [Fact]
+            public void ReturnsEmptyListOfProcesses()
+            {
+                var processIds = jobObject.GetProcessIds();
+
+                Assert.Empty(processIds);
+            }
+        }
+
+        public class WhenManagingOneProcess : IDisposable
+        {
+            JobObject jobObject;
+            Process process;
+
+            public WhenManagingOneProcess()
+            {
+                jobObject = new JobObject();
+
+                var batch = @"for /L %i in (1,1,10000000) do @echo %i";
+                process = Process.Start("cmd.exe", "/K " + batch);
+
+                jobObject.AssignProcessToJob(process);
+            }
+
+            public void Dispose()
+            {
+                process.Kill();
+                jobObject.Dispose();
+            }
+
+            [Fact]
+            public void ReturnsCpuStatistics()
+            {
+                // Give the process some time to execute
+                Thread.Sleep(500);
+
+                var stats = jobObject.GetCpuStatistics();
+
+                Assert.NotEqual(TimeSpan.Zero, stats.TotalKernelTime + stats.TotalUserTime);
+            }
+
+            [Fact]
+            public void ReturnsProcess()
+            {
+                var processIds = jobObject.GetProcessIds();
+
+                Assert.Collection(processIds,
+                    x => Assert.Equal(process.Id, x)
+                );
+            }
+        }
+
+        public class WhenManagingMultipleProcesses : IDisposable
+        {
+            JobObject jobObject;
+            Process[] processes;
+
+            public WhenManagingMultipleProcesses()
+            {
+                jobObject = new JobObject();
+
+                var batch = @"for /L %i in (1,1,10000000) do @echo %i";
+
+                processes = new []
+                {
+                    Process.Start("cmd.exe", "/K " + batch),
+                    Process.Start("cmd.exe", "/K " + batch),
+                };
+
+                foreach (var process in processes)
+                    jobObject.AssignProcessToJob(process);
+            }
+
+            public void Dispose()
+            {
+                foreach (var process in processes)
+                    process.Kill();
+
+                jobObject.Dispose();
+            }
+
+            [Fact]
+            public void ReturnsCpuStatistics()
+            {
+                // Give the processes some time to execute
+                Thread.Sleep(250);
+
+                var stats = jobObject.GetCpuStatistics();
+
+                Assert.NotEqual(TimeSpan.Zero, stats.TotalKernelTime + stats.TotalUserTime);
+            }
+
+            [Fact]
+            public void ReturnsProcesses()
+            {
+                var processIds = jobObject.GetProcessIds();
+
+                Assert.Collection(processIds,
+                    x => Assert.Equal(processes[0].Id, x),
+                    x => Assert.Equal(processes[1].Id, x)
+                );
+            }
         }
     }
 }

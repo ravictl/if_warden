@@ -11,7 +11,7 @@
 
     public class ProcessManager : IDisposable
     {
-        private readonly JobObject jobObject = new JobObject();
+        private readonly JobObject jobObject;
         private readonly Logger log = LogManager.GetCurrentClassLogger();
         private readonly ConcurrentDictionary<int, IProcess> processes = new ConcurrentDictionary<int, IProcess>();
         private readonly ProcessLauncher processLauncher;
@@ -19,16 +19,16 @@
 
         private readonly Func<Process, bool> processMatchesUser;
 
-        public ProcessManager(string containerUser)
-            : this(new ProcessLauncher(), containerUser)
+        public ProcessManager(string containerUser) : this(new JobObject(), new ProcessLauncher(), containerUser)
         {
         }
 
-        public ProcessManager(ProcessLauncher processLauncher, string containerUser)
+        public ProcessManager(JobObject jobObject, ProcessLauncher processLauncher, string containerUser)
         {
             if (containerUser == null)
                 throw new ArgumentNullException("containerUser");
 
+            this.jobObject = jobObject;
             this.processLauncher = processLauncher;
             this.containerUser = containerUser;
 
@@ -44,27 +44,22 @@
             get { return processes.Count > 0; }
         }
 
-        public void AddProcess(IProcess process)
-        {
-            if (processes.TryAdd(process.Id, process))
-            {
-                process.Exited += process_Exited;
-            }
-            else
-            {
-                throw new InvalidOperationException(
-                    String.Format("Process '{0}' already added to process manager for user '{1}'", process.Id, containerUser));
-            }
-        }
-
-        public void AddProcess(Process process)
-        {
-            AddProcess(new RealProcessWrapper(process));
-        }
-
         public bool ContainsProcess(int processId)
         {
             return processes.ContainsKey(processId);
+        }
+
+        public virtual IProcess GetProcessById(int processId)
+        {
+            try
+            {
+                var process = Process.GetProcessById(processId);
+                return new RealProcessWrapper(process);
+            }
+            catch (ArgumentException)
+            {
+                return null;
+            }
         }
 
         public virtual IProcess CreateProcess(CreateProcessStartInfo startInfo)
@@ -74,6 +69,9 @@
             {
                 throw new InvalidOperationException("A process with the id " + process.Id + " is already being tracked.");
             }
+
+            process.Exited += process_Exited;
+
             return process;
         }
 
@@ -141,23 +139,32 @@
 
         public ProcessStats GetProcessStats()
         {
-            var results = new ProcessStats();
-            if (processes.Count == 0) { return results; }
+            var cpuStatistics = jobObject.GetCpuStatistics();
+            var processIds = jobObject.GetProcessIds();
 
-            results = processes.Values
-                .Select(p => StatsFromProcess(p))
-                .Aggregate<ProcessStats>((ag, next) => ag + next);
+            var processes = processIds
+                .Select(id => GetProcessById(id))
+                .Where(p => p != null)
+                .ToList();
 
-            return results;
-        }
+            long privateMemory = 0;
+            long pagedMemory = 0;
+            long workingSet = 0;
 
-        private static ProcessStats StatsFromProcess(IProcess process)
-        {
+            foreach (var process in processes)
+            {
+                privateMemory += process.PrivateMemoryBytes;
+                pagedMemory += process.PagedMemoryBytes;
+                workingSet += process.WorkingSet;
+            }
+
             return new ProcessStats
             {
-                TotalProcessorTime = process.TotalProcessorTime,
-                TotalUserProcessorTime = process.TotalUserProcessorTime,
-                WorkingSet = process.WorkingSet,
+                TotalProcessorTime = cpuStatistics.TotalKernelTime + cpuStatistics.TotalUserTime,
+                TotalUserProcessorTime = cpuStatistics.TotalUserTime,
+                PrivateMemory = privateMemory,
+                PagedMemory = pagedMemory,
+                WorkingSet = workingSet,
             };
         }
 
@@ -214,6 +221,16 @@
                 }
             }
 
+            public long PrivateMemoryBytes
+            {
+                get { return process.PrivateMemorySize64; }
+            }
+
+            public long PagedMemoryBytes
+            {
+                get { return process.PagedMemorySize64; }
+            }
+
             public long WorkingSet
             {
                 get { return process.WorkingSet64; }
@@ -235,16 +252,8 @@
     {
         public TimeSpan TotalProcessorTime { get; set; }
         public TimeSpan TotalUserProcessorTime { get; set; }
+        public long PrivateMemory { get; set; }
+        public long PagedMemory { get; set; }
         public long WorkingSet { get; set; }
-
-        public static ProcessStats operator +(ProcessStats left, ProcessStats right)
-        {
-            return new ProcessStats
-            {
-                TotalProcessorTime = left.TotalProcessorTime + right.TotalProcessorTime,
-                TotalUserProcessorTime = left.TotalUserProcessorTime + right.TotalUserProcessorTime,
-                WorkingSet = left.WorkingSet + right.WorkingSet,
-            };
-        }
     }
 }

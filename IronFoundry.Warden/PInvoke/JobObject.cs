@@ -9,16 +9,55 @@
 
     public partial class NativeMethods
     {
-        [DllImport("kernel32.dll", SetLastError = true)]
-        public static extern IntPtr CreateJobObject(IntPtr securityAttributes, string name);
+        public const uint ERROR_MORE_DATA = 0x000000EA;
 
-        [DllImport("kernel32.dll", SetLastError=true)]
-        [return:MarshalAs(UnmanagedType.Bool)]
-        public static extern bool IsProcessInJob(IntPtr processHandle, SafeHandle jobHandle, [MarshalAs(UnmanagedType.Bool)]out bool result);
+        public enum JobObjectInfoClass : uint
+        {
+            JobObjectBasicAccountingInformation = 1,
+            JobObjectBasicProcessIdList = 3,
+        }
+
+        [StructLayout(LayoutKind.Sequential)]
+        public struct JobObjectBasicAccountingInformation
+        {
+            public long TotalUserTime;
+            public long TotalKernelTime;
+            public long ThisPeriodTotalUserTime;
+            public long ThisPeriodTotalKernelTime;
+            public uint TotalPageFaultCount;
+            public uint TotalProcesses;
+            public uint ActiveProcesses;
+            public uint TotalTerminatedProcesses;
+        }
+
+        [StructLayout(LayoutKind.Sequential)]
+        public struct JobObjectBasicProcessIdList
+        {
+            // NOTE: Do not rename these fields or otherwise modify this struct without updating custom marshalling code!
+            public uint NumberOfAssignedProcesses;
+            public uint NumberOfProcessIdsInList;
+            public IntPtr FirstProcessId;
+        }
 
         [DllImport("kernel32.dll", SetLastError = true)]
         [return: MarshalAs(UnmanagedType.Bool)]
         public static extern bool AssignProcessToJobObject(SafeHandle jobHandle, IntPtr processHandle);
+
+        [DllImport("kernel32.dll", SetLastError = true)]
+        public static extern IntPtr CreateJobObject(IntPtr securityAttributes, string name);
+
+        [DllImport("kernel32.dll", SetLastError = true)]
+        [return:MarshalAs(UnmanagedType.Bool)]
+        public static extern bool IsProcessInJob(IntPtr processHandle, SafeHandle jobHandle, [MarshalAs(UnmanagedType.Bool)]out bool result);
+
+        [DllImport("kernel32.dll", SetLastError = true)]
+        [return:MarshalAs(UnmanagedType.Bool)]
+        public static extern bool QueryInformationJobObject(
+            SafeHandle jobHandle, 
+            [MarshalAs(UnmanagedType.U4)] JobObjectInfoClass infoClass, 
+            IntPtr info, 
+            [MarshalAs(UnmanagedType.U4)] int infoLength, 
+            IntPtr returnedInfoLength);
 
         [DllImport("kernel32.dll", SetLastError = true)]
         [return: MarshalAs(UnmanagedType.Bool)]

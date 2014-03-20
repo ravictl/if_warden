@@ -80,7 +80,7 @@
             [MarshalAs(UnmanagedType.U4)] JobObjectInfoClass infoClass,
             IntPtr info,
             [MarshalAs(UnmanagedType.U4)] int infoLength,
-            ref uint returnedInfoLength);
+            IntPtr returnedInfoLength);
 
         [DllImport("kernel32.dll", SetLastError = true)]
         [return: MarshalAs(UnmanagedType.Bool)]

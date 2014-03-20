@@ -44,10 +44,7 @@
 
         public SafeJobObjectHandle Handle
         {
-            get
-            {
-                return handle;
-            }
+            get { return handle; }
         }
 
         public void Dispose()
@@ -92,14 +89,13 @@
             try
             {
                 infoPtr = Marshal.AllocHGlobal(infoSize);
-                uint returnedLength = 0;
 
                 if (!NativeMethods.QueryInformationJobObject(
                     handle,
                     NativeMethods.JobObjectInfoClass.JobObjectBasicAccountingInformation,
                     infoPtr,
                     infoSize,
-                    ref returnedLength))
+                    IntPtr.Zero))
                 {
                     var error = Marshal.GetLastWin32Error();
                     if (error != NativeMethods.ERROR_MORE_DATA)
@@ -115,90 +111,62 @@
             }
         }
 
-        static int GetNumberOfProcessesInJob(SafeJobObjectHandle handle)
-        {
-            int infoSize = Marshal.SizeOf(typeof(NativeMethods.JobObjectBasicProcessIdList));
-            IntPtr infoPtr = IntPtr.Zero;
-            try
-            {
-                int numberOfAssignedProcessesOffset = Marshal.OffsetOf(typeof(NativeMethods.JobObjectBasicProcessIdList), "NumberOfAssignedProcesses").ToInt32();
-                int numberOfProcessIdsInListOffset = Marshal.OffsetOf(typeof(NativeMethods.JobObjectBasicProcessIdList), "NumberOfProcessIdsInList").ToInt32();
-                
-                infoPtr = Marshal.AllocHGlobal(infoSize * 5);
-
-                Marshal.WriteInt32(infoPtr, numberOfAssignedProcessesOffset, 5);
-                Marshal.WriteInt32(infoPtr, numberOfProcessIdsInListOffset, 0);
-
-                uint returnedLength = 0;
-
-                if (!NativeMethods.QueryInformationJobObject(
-                    handle,
-                    NativeMethods.JobObjectInfoClass.JobObjectBasicProcessIdList,
-                    infoPtr,
-                    infoSize,
-                    ref returnedLength))
-                {
-                    var error = Marshal.GetLastWin32Error();
-                    if (error != NativeMethods.ERROR_MORE_DATA)
-                        throw new Win32Exception(error);
-                }
-
-                var info = (NativeMethods.JobObjectBasicProcessIdList)Marshal.PtrToStructure(infoPtr, typeof(NativeMethods.JobObjectBasicProcessIdList));
-
-                return (int)info.NumberOfAssignedProcesses;
-            }
-            finally
-            {
-                if (infoPtr != IntPtr.Zero)
-                    Marshal.FreeHGlobal(infoPtr);
-            }
-        }
-
         static int[] GetJobObjectProcessIds(SafeJobObjectHandle handle)
         {
-            int numberOfProcessesInJob = GetNumberOfProcessesInJob(handle);
-            if (numberOfProcessesInJob == 0)
-                return new int[0];
+            const int JobCountIncrement = 5;
 
             int numberOfAssignedProcessesOffset = Marshal.OffsetOf(typeof(NativeMethods.JobObjectBasicProcessIdList), "NumberOfAssignedProcesses").ToInt32();
             int numberOfProcessIdsInListOffset = Marshal.OffsetOf(typeof(NativeMethods.JobObjectBasicProcessIdList), "NumberOfProcessIdsInList").ToInt32();
             int firstProcessIdOffset = Marshal.OffsetOf(typeof(NativeMethods.JobObjectBasicProcessIdList), "FirstProcessId").ToInt32();
 
-            int infoSize = firstProcessIdOffset + (IntPtr.Size * numberOfProcessesInJob);
-            IntPtr infoPtr = IntPtr.Zero;
-            try
+            int numberOfProcessesInJob = JobCountIncrement;
+            do
             {
-                infoPtr = Marshal.AllocHGlobal(infoSize);
-
-                Marshal.WriteInt32(infoPtr, numberOfAssignedProcessesOffset, numberOfProcessesInJob);
-                Marshal.WriteInt32(infoPtr, numberOfProcessIdsInListOffset, 0);
-
-                uint returnedLength = 0;
-                if (!NativeMethods.QueryInformationJobObject(
-                    handle,
-                    NativeMethods.JobObjectInfoClass.JobObjectBasicProcessIdList,
-                    infoPtr,
-                    infoSize,
-                    ref returnedLength))
+                int infoSize = firstProcessIdOffset + (IntPtr.Size * numberOfProcessesInJob);
+                IntPtr infoPtr = IntPtr.Zero;
+                try
                 {
-                    var error = Marshal.GetLastWin32Error();
-                    if (error != NativeMethods.ERROR_MORE_DATA)
+                    infoPtr = Marshal.AllocHGlobal(infoSize);
+                    NativeMethods.FillMemory(infoPtr, (IntPtr)infoSize, 0);
+
+                    Marshal.WriteInt32(infoPtr, numberOfAssignedProcessesOffset, numberOfProcessesInJob);
+                    Marshal.WriteInt32(infoPtr, numberOfProcessIdsInListOffset, 0);
+                    
+
+                    if (!NativeMethods.QueryInformationJobObject(
+                        handle,
+                        NativeMethods.JobObjectInfoClass.JobObjectBasicProcessIdList,
+                        infoPtr,
+                        infoSize,
+                        IntPtr.Zero))
+                    {
+                        var error = Marshal.GetLastWin32Error();
+                        if (error == NativeMethods.ERROR_MORE_DATA)
+                        {
+                            numberOfProcessesInJob += JobCountIncrement;
+                            continue;
+                        }
+
                         throw new Win32Exception(error);
+                    }
+
+                    int count = Marshal.ReadInt32(infoPtr, numberOfProcessIdsInListOffset);
+                    if (count == 0)
+                        return new int[0];
+
+                    IntPtr[] ids = new IntPtr[count];
+
+                    Marshal.Copy(infoPtr + firstProcessIdOffset, ids, 0, count);
+
+                    return ids.Select(id => id.ToInt32()).ToArray();
+                }
+                finally
+                {
+                    if (infoPtr != IntPtr.Zero)
+                        Marshal.FreeHGlobal(infoPtr);
                 }
 
-                int count = Marshal.ReadInt32(infoPtr, numberOfProcessIdsInListOffset);
-
-                IntPtr[] ids = new IntPtr[count];
-
-                Marshal.Copy(infoPtr + firstProcessIdOffset, ids, 0, count);
-
-                return ids.Select(id => id.ToInt32()).ToArray();
-            }
-            finally
-            {
-                if (infoPtr != IntPtr.Zero)
-                    Marshal.FreeHGlobal(infoPtr);
-            }
+            } while (true);
         }
 
         public void TerminateProcesses()
@@ -206,7 +174,5 @@
             if (handle == null) { throw new ObjectDisposedException("JobObject"); }
             NativeMethods.TerminateJobObject(handle, 0);
         }
-
-      
     }
 }

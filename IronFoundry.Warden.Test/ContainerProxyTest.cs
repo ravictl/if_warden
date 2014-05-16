@@ -217,14 +217,6 @@ namespace IronFoundry.Warden.Test
             }
 
             [Fact]
-            public async void CachesUserInfo()
-            {
-                await CompleteInitializationAsync();
-
-                Assert.Equal(testUserName, proxy.ContainerUserName);
-            }
-
-            [Fact]
             public async void CachesContainerHandle()
             {
                 await CompleteInitializationAsync();

@@ -30,7 +30,7 @@ namespace IronFoundry.Warden.Containers
             cachedContainerState = ContainerState.Born;
         }
 
-        public string ContainerUserName
+        private string ContainerUserName
         {
             get { return containerResources.User.UserName; }
         }

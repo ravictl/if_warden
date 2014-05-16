@@ -76,11 +76,18 @@ namespace IronFoundry.Warden.ContainerHost
 
             var input = Console.In;
             var output = Console.Out;
+            string handle = null;
 
-            if (args.Length < 1)
-                throw new InvalidOperationException("Cannot start host, missing JobObject name.");
+            var options = new NDesk.Options.OptionSet {
+                { "handle=", v => handle = v },
+            };
 
-            var jobObject = new JobObject(args[0]);
+            options.Parse(args);
+
+            if (String.IsNullOrWhiteSpace(handle))
+                throw new InvalidOperationException("Cannot start host, missing container handle.");
+
+            var jobObject = new JobObject(handle);
             var jobObjectLimits = new JobObjectLimits(jobObject);
             var hostProcess = System.Diagnostics.Process.GetCurrentProcess();
             jobObject.AssignProcessToJob(hostProcess);

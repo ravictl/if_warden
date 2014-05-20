@@ -50,7 +50,6 @@
     <Compile Include="Containers\ContainerResourceHolder.cs" />
     <Compile Include="Containers\ContainerStub.cs" />
     <Compile Include="Containers\ContainerUser.cs" />
-    <Compile Include="Containers\ContainerState.cs" />
     <Compile Include="Containers\IContainer.cs" />
     <Compile Include="Containers\IContainerClient.cs" />
     <Compile Include="Containers\IContainerManager.cs" />

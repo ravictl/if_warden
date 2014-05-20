@@ -55,23 +55,6 @@ namespace IronFoundry.Warden.Containers
             get { return containerResources.Handle; }
         }
 
-        public ContainerState State
-        {
-            get
-            {
-                if (RemoteHalted)
-                {
-                    cachedContainerState = ContainerState.Stopped;
-                }
-                else if (IsRemoteActive)
-                {
-                    cachedContainerState = GetRemoteContainerState().GetAwaiter().GetResult();
-                }
-
-                return cachedContainerState;
-            }
-        }
-
         public async Task BindMountsAsync(IEnumerable<BindMount> mounts)
         {
             if (!IsRemoteActive) throw NotActiveError();

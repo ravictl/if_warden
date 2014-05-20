@@ -394,7 +394,7 @@ namespace IronFoundry.Warden.Test
                 [Fact]
                 public void ReturnsState()
                 {
-                    Assert.Equal(containerStub.State.ToString(), Info.State);
+                    Assert.Equal(containerStub.State, Info.State);
                 }
 
                 [Fact]

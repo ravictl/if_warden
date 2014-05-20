@@ -193,7 +193,7 @@ namespace IronFoundry.Warden.Containers
                 HostIPAddress = ipAddressString,
                 ContainerIPAddress = ipAddressString,
                 ContainerPath = containerDirectory.FullName,
-                State = currentState.ToString(),
+                State = currentState,
                 CpuStat = GetCpuStat(),
                 MemoryStat = GetMemoryStat(),
             };

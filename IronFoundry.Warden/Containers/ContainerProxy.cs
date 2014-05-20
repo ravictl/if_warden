@@ -187,9 +187,12 @@ namespace IronFoundry.Warden.Containers
             return containerResources.AssignedPort.Value;
         }
 
-        public async Task StopAsync()
+        public async Task StopAsync(bool kill)
         {
-            await DestroyAsync();
+            if (IsRemoteActive)
+                await launcher.SendMessageAsync<StopRequest, StopResponse>(new StopRequest(kill));
+
+            cachedContainerState = ContainerState.Stopped;
         }
 
         public IEnumerable<string> DrainEvents()

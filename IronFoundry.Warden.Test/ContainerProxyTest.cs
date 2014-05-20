@@ -120,6 +120,13 @@ namespace IronFoundry.Warden.Test
             }
 
             [Fact]
+            public async void StopDoesNotSendToStub()
+            {
+                await proxy.StopAsync(false);
+                this.launcher.DidNotReceive(x => x.SendMessageAsync<StopRequest, StopResponse>(Arg.Any<StopRequest>()));
+            }
+
+            [Fact]
             public async void DestroyDoesNotSendToStub()
             {
                 await proxy.DestroyAsync();
@@ -268,34 +275,24 @@ namespace IronFoundry.Warden.Test
             }
 
             [Fact]
-            public async void StopSendsDestroyMessageToStubOnDestroy()
+            public async void StopSendsStopMessageToStub()
             {
                 await CompleteInitializationAsync();
 
-                await proxy.StopAsync();
+                await proxy.StopAsync(false);
 
-                launcher.Received(x => x.SendMessageAsync<ContainerDestroyRequest, ContainerDestroyResponse>(Arg.Any<ContainerDestroyRequest>()));
+                launcher.Received(x => x.SendMessageAsync<StopRequest, StopResponse>(Arg.Any<StopRequest>()));
             }
 
             [Fact]
-            public async void StopDestroysResourceHolder()
-            {
-                await CompleteInitializationAsync();
-
-                await proxy.StopAsync();
-
-                resourceHolder.Received(x => x.Destroy());
-            }
-
-            [Fact]
-            public async void StopDestroySetsStateToDestroy()
+            public async void StopSetsStateToStopped()
             {
                 await CompleteInitializationAsync();
                 launcher.IsActive.Returns(false);
 
-                await proxy.StopAsync();
+                await proxy.StopAsync(false);
 
-                Assert.Equal(ContainerState.Destroyed, proxy.State);
+                Assert.Equal(ContainerState.Stopped, proxy.State);
             }
 
             [Fact]

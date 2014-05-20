@@ -22,6 +22,6 @@ namespace IronFoundry.Warden.Containers
         Task LimitMemoryAsync(ulong bytes);
         int ReservePort(int port);
         Task<CommandResult> RunCommandAsync(RemoteCommand command);
-        Task StopAsync();
+        Task StopAsync(bool kill);
     }
 }

@@ -478,29 +478,21 @@ namespace IronFoundry.Warden.Test
                 }
 
                 [Fact]
-                public void WhenRequestExitThrows_DoesNotPreventJobObjectFromTerminating()
+                public void WhenKillIsFalse_ProcessKillInvoked()
                 {
-                    Processes[0].Throws(x => x.RequestExit(), new InvalidTimeZoneException());
-
                     containerStub.Stop(false);
 
-                    jobObject.Received(1, x => x.TerminateProcessesAndWait());
+                    Processes[0].Received(1, x => x.Kill());
+                    Processes[1].Received(1, x => x.Kill());
                 }
 
                 [Fact]
-                public void TerminatesJobObject()
+                public void WhenKillIsTrue_ProcessKillInvoked()
                 {
                     containerStub.Stop(true);
 
-                    jobObject.Received(1, x => x.TerminateProcessesAndWait());
-                }
-
-                [Fact]
-                public void DisposesJobObject()
-                {
-                    containerStub.Stop(false);
-
-                    jobObject.Received(1, x => x.Dispose());
+                    Processes[0].Received(1, x => x.Kill());
+                    Processes[1].Received(1, x => x.Kill());
                 }
 
                 [Fact]

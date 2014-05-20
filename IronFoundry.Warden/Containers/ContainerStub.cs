@@ -280,10 +280,6 @@ namespace IronFoundry.Warden.Containers
 
             Task.WaitAll(processTasks);
 
-            //// Closes job object
-            //jobObject.TerminateProcessesAndWait();
-            //jobObject.Dispose();
-
             // Set state to Stopped
             currentState = ContainerState.Stopped;
         }

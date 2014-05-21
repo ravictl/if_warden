@@ -93,57 +93,72 @@ namespace IronFoundry.Warden.Test
             }
         }
 
-        public class GivenDestroyedHolder
+        public class MockedResourceContext
         {
-            private ContainerHandle handle;
-            private IContainerUser user;
-            private IContainerDirectory directory;
-            private JobObject jobObject;
-            private ContainerResourceHolder resourceHolder;
-            private ILocalTcpPortManager localTcpManager;
+            protected ContainerHandle handle;
+            protected IContainerUser user;
+            protected IContainerDirectory directory;
+            protected JobObject jobObject;
+            protected ILocalTcpPortManager localTcpManager;
 
-            public GivenDestroyedHolder()
+            public MockedResourceContext()
             {
                 handle = Substitute.For<ContainerHandle>();
                 user = Substitute.For<IContainerUser>();
                 directory = Substitute.For<IContainerDirectory>();
                 jobObject = Substitute.For<JobObject>();
                 localTcpManager = Substitute.For<ILocalTcpPortManager>();
-
-                resourceHolder = new ContainerResourceHolder(handle, user, directory, jobObject, localTcpManager);
-                resourceHolder.Destroy();
             }
+        }
 
+        public class GivenDestroyedHolder : MockedResourceContext
+        {
             [Fact]
             public void TerminatesJobObjectProcesses()
             {
+                var resourceHolder = new ContainerResourceHolder(handle, user, directory, jobObject, localTcpManager, true);
+
+                resourceHolder.Destroy();
+
                 jobObject.ReceivedWithAnyArgs().TerminateProcessesAndWait();
             }
 
             [Fact]
             public void DisposesJobObject()
             {
+                var resourceHolder = new ContainerResourceHolder(handle, user, directory, jobObject, localTcpManager, true);
+
+                resourceHolder.Destroy();
+
                 jobObject.Received().Dispose();
             }
 
             [Fact]
             public void RequestsRemoveUser()
             {
+                var resourceHolder = new ContainerResourceHolder(handle, user, directory, jobObject, localTcpManager, true);
+
+                resourceHolder.Destroy();
+
                 user.Received().Delete();
             }
 
             [Fact]
             public void RequestsDeleteDirectory()
             {
+                var resourceHolder = new ContainerResourceHolder(handle, user, directory, jobObject, localTcpManager, true);
+
+                resourceHolder.Destroy();
+
                 directory.Received().Delete();
             }
 
             [Fact]
             public void RequestsReleasePortIfPortAssigned()
             {
-                var holder = new ContainerResourceHolder(handle, user, directory, jobObject, localTcpManager) { AssignedPort = 8888 };
+                var resourceHolder = new ContainerResourceHolder(handle, user, directory, jobObject, localTcpManager, true) { AssignedPort = 8888 };
 
-                holder.Destroy();
+                resourceHolder.Destroy();
 
                 localTcpManager.Received().ReleaseLocalPort(Arg.Any<ushort>(), Arg.Any<string>());
             }
@@ -151,38 +166,19 @@ namespace IronFoundry.Warden.Test
             [Fact]
             public void DoesNotTryToReleasePortIfNoPortAssigned()
             {
-                var holder = new ContainerResourceHolder(handle, user, directory, jobObject, localTcpManager);
+                var resourceHolder = new ContainerResourceHolder(handle, user, directory, jobObject, localTcpManager, true);
 
-                holder.Destroy();
+                resourceHolder.Destroy();
 
                 localTcpManager.DidNotReceive().ReleaseLocalPort(Arg.Any<ushort>(), Arg.Any<string>());
-            }
-        }
-
-        public class WhenDestroyingHolder
-        {
-            private ContainerHandle handle;
-            private IContainerUser user;
-            private IContainerDirectory directory;
-            private JobObject jobObject;
-            private ContainerResourceHolder resourceHolder;
-            private ILocalTcpPortManager localTcpManager;
-
-            public WhenDestroyingHolder()
-            {
-                handle = Substitute.For<ContainerHandle>();
-                user = Substitute.For<IContainerUser>();
-                directory = Substitute.For<IContainerDirectory>();
-                jobObject = Substitute.For<JobObject>();
-                localTcpManager = Substitute.For<ILocalTcpPortManager>();
-
-                resourceHolder = new ContainerResourceHolder(handle, user, directory, jobObject, localTcpManager);
-                resourceHolder.AssignedPort = 1234;
             }
 
             [Fact]
             public void DeletesOtherResources_WhenDeleteDirectoryThrows()
             {
+                var resourceHolder = new ContainerResourceHolder(handle, user, directory, jobObject, localTcpManager, true);
+                resourceHolder.AssignedPort = 8888;
+
                 directory.When(x => x.Delete()).Do(x => { throw new IOException(); });
 
                 resourceHolder.Destroy();
@@ -196,6 +192,9 @@ namespace IronFoundry.Warden.Test
             [Fact]
             public void DeletesOtherResources_WhenDeleteUserThrows()
             {
+                var resourceHolder = new ContainerResourceHolder(handle, user, directory, jobObject, localTcpManager, true);
+                resourceHolder.AssignedPort = 8888;
+
                 user.When(x => x.Delete()).Do(x => { throw new System.DirectoryServices.DirectoryServicesCOMException(); });
 
                 resourceHolder.Destroy();
@@ -209,6 +208,7 @@ namespace IronFoundry.Warden.Test
             [Fact]
             public void DeletesOtherResources_WhenReleaseLocalPortThrows()
             {
+                var resourceHolder = new ContainerResourceHolder(handle, user, directory, jobObject, localTcpManager, true);
                 localTcpManager.When(x => x.ReleaseLocalPort(Arg.Any<ushort>(), Arg.Any<string>())).Do(x => { throw new Exception(); });
 
                 resourceHolder.Destroy();
@@ -217,6 +217,16 @@ namespace IronFoundry.Warden.Test
                 jobObject.Received(1, x => x.TerminateProcessesAndWait(Arg.Any<int>()));
                 jobObject.Received(1, x => x.Dispose());
                 user.Received(1, x => x.Delete());
+            }
+
+            [Fact]
+            public void WhenDoNotDeleteDirectorySpecified_DoesNotInvokeDirectoryDelete()
+            {
+                var resourceHolder = new ContainerResourceHolder(handle, user, directory, jobObject, localTcpManager, false);
+
+                resourceHolder.Destroy();
+
+                directory.DidNotReceive(x => x.Delete());
             }
         }
     }

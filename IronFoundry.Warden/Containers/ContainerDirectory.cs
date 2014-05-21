@@ -19,15 +19,13 @@
     {
         private readonly IContainerUser user;
         private readonly DirectoryInfo containerDirectory;
-        private readonly bool shouldDelete;
 
-        public ContainerDirectory(ContainerHandle handle, IContainerUser user, string containerBaseDirectory, bool shouldCreate = false, bool shouldDelete = true)
+        public ContainerDirectory(ContainerHandle handle, IContainerUser user, string containerBaseDirectory, bool shouldCreate = false)
         {
             if (handle == null)
                 throw new ArgumentNullException("handle");
 
             this.user = user;
-            this.shouldDelete = shouldDelete;
 
             this.containerDirectory = shouldCreate ?
                 CreateContainerDirectory(containerBaseDirectory, handle, user) :
@@ -61,10 +59,7 @@
 
         public void Delete()
         {
-            if (shouldDelete)
-            {
-                containerDirectory.Delete(true);
-            }
+            containerDirectory.Delete(true);
         }
 
         public override string ToString()

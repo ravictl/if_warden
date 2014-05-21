@@ -23,14 +23,22 @@ namespace IronFoundry.Warden.Containers
     public class ContainerResourceHolder : IResourceHolder
     {
         private const int TerminateWaitTimeout = 2000; // ms
+        private readonly bool deleteDirectories;
 
-        public ContainerResourceHolder(ContainerHandle handle, IContainerUser user, IContainerDirectory directory, JobObject jobObject, ILocalTcpPortManager localTcpPortManager)
+        public ContainerResourceHolder(
+            ContainerHandle handle, 
+            IContainerUser user, 
+            IContainerDirectory directory, 
+            JobObject jobObject, 
+            ILocalTcpPortManager localTcpPortManager, 
+            bool deleteDirectories)
         {
             Handle = handle;
             User = user;
             Directory = directory;
             JobObject = jobObject;
             LocalTcpPortManager = localTcpPortManager;
+            this.deleteDirectories = deleteDirectories;
         }
 
         public ushort? AssignedPort { get; set; }
@@ -47,7 +55,8 @@ namespace IronFoundry.Warden.Containers
 
             try
             {
-                Directory.Delete();
+                if (deleteDirectories)
+                    Directory.Delete();
             }
             catch (IOException)
             {
@@ -86,7 +95,8 @@ namespace IronFoundry.Warden.Containers
                 user,
                 directory,
                 new JobObject(handle.ToString()),
-                localPortManager
+                localPortManager,
+                config.DeleteContainerDirectories
                 );
 
             return resoureHolder;
@@ -95,14 +105,15 @@ namespace IronFoundry.Warden.Containers
         public static IResourceHolder CreateForDestroy(IWardenConfig config, ContainerHandle handle)
         {
             var user = new TempUser(handle, new LocalPrincipalManager(new DesktopPermissionManager()));
-            var directory = new TempDirectory(handle, config.ContainerBasePath, config.DeleteContainerDirectories);
+            var directory = new TempDirectory(handle, config.ContainerBasePath);
             var localPortManager = new LocalTcpPortManager(new FirewallManager(), new NetShRunner());
             var resoureHolder = new ContainerResourceHolder(
                 handle,
                 user,
                 directory,
                 new JobObject(handle.ToString()),
-                localPortManager
+                localPortManager,
+                config.DeleteContainerDirectories
                 );
 
             return resoureHolder;
@@ -137,12 +148,10 @@ namespace IronFoundry.Warden.Containers
         class TempDirectory : IContainerDirectory
         {
             private readonly string fullPath;
-            private readonly bool shouldDelete;
 
-            public TempDirectory(ContainerHandle handle, string containerBasePath, bool shouldDelete)
+            public TempDirectory(ContainerHandle handle, string containerBasePath)
             {
                 fullPath = Path.Combine(containerBasePath, handle);
-                this.shouldDelete = shouldDelete;
             }
 
             public string FullName
@@ -157,7 +166,7 @@ namespace IronFoundry.Warden.Containers
 
             public void Delete()
             {
-                if (System.IO.Directory.Exists(fullPath) && shouldDelete)
+                if (System.IO.Directory.Exists(fullPath))
                 {
                     System.IO.Directory.Delete(fullPath, true);
                 }

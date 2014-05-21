@@ -61,7 +61,7 @@ namespace IronFoundry.Warden.Test
             [FactAdminRequired]
             public void CreateProducesContainerResourcesReference()
             {
-                
+
                 Assert.NotNull(containerResources);
             }
 
@@ -109,7 +109,7 @@ namespace IronFoundry.Warden.Test
                 directory = Substitute.For<IContainerDirectory>();
                 jobObject = Substitute.For<JobObject>();
                 localTcpManager = Substitute.For<ILocalTcpPortManager>();
-                
+
                 resourceHolder = new ContainerResourceHolder(handle, user, directory, jobObject, localTcpManager);
                 resourceHolder.Destroy();
             }
@@ -140,8 +140,8 @@ namespace IronFoundry.Warden.Test
 
             [Fact]
             public void RequestsReleasePortIfPortAssigned()
-            {   
-                var holder = new ContainerResourceHolder(handle, user, directory, jobObject, localTcpManager) {AssignedPort = 8888};
+            {
+                var holder = new ContainerResourceHolder(handle, user, directory, jobObject, localTcpManager) { AssignedPort = 8888 };
 
                 holder.Destroy();
 
@@ -156,6 +156,67 @@ namespace IronFoundry.Warden.Test
                 holder.Destroy();
 
                 localTcpManager.DidNotReceive().ReleaseLocalPort(Arg.Any<ushort>(), Arg.Any<string>());
+            }
+        }
+
+        public class WhenDestroyingHolder
+        {
+            private ContainerHandle handle;
+            private IContainerUser user;
+            private IContainerDirectory directory;
+            private JobObject jobObject;
+            private ContainerResourceHolder resourceHolder;
+            private ILocalTcpPortManager localTcpManager;
+
+            public WhenDestroyingHolder()
+            {
+                handle = Substitute.For<ContainerHandle>();
+                user = Substitute.For<IContainerUser>();
+                directory = Substitute.For<IContainerDirectory>();
+                jobObject = Substitute.For<JobObject>();
+                localTcpManager = Substitute.For<ILocalTcpPortManager>();
+
+                resourceHolder = new ContainerResourceHolder(handle, user, directory, jobObject, localTcpManager);
+                resourceHolder.AssignedPort = 1234;
+            }
+
+            [Fact]
+            public void DeletesOtherResources_WhenDeleteDirectoryThrows()
+            {
+                directory.When(x => x.Delete()).Do(x => { throw new IOException(); });
+
+                resourceHolder.Destroy();
+
+                user.Received(1, x => x.Delete());
+                jobObject.Received(1, x => x.TerminateProcessesAndWait(Arg.Any<int>()));
+                jobObject.Received(1, x => x.Dispose());
+                localTcpManager.Received(1, x => x.ReleaseLocalPort(Arg.Any<ushort>(), Arg.Any<string>()));
+            }
+
+            [Fact]
+            public void DeletesOtherResources_WhenDeleteUserThrows()
+            {
+                user.When(x => x.Delete()).Do(x => { throw new System.DirectoryServices.DirectoryServicesCOMException(); });
+
+                resourceHolder.Destroy();
+
+                directory.Received(1, x => x.Delete());
+                jobObject.Received(1, x => x.TerminateProcessesAndWait(Arg.Any<int>()));
+                jobObject.Received(1, x => x.Dispose());
+                localTcpManager.Received(1, x => x.ReleaseLocalPort(Arg.Any<ushort>(), Arg.Any<string>()));
+            }
+
+            [Fact]
+            public void DeletesOtherResources_WhenReleaseLocalPortThrows()
+            {
+                localTcpManager.When(x => x.ReleaseLocalPort(Arg.Any<ushort>(), Arg.Any<string>())).Do(x => { throw new Exception(); });
+
+                resourceHolder.Destroy();
+
+                directory.Received(1, x => x.Delete());
+                jobObject.Received(1, x => x.TerminateProcessesAndWait(Arg.Any<int>()));
+                jobObject.Received(1, x => x.Dispose());
+                user.Received(1, x => x.Delete());
             }
         }
     }

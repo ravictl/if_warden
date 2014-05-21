@@ -1,6 +1,10 @@
 ﻿using System.Net;
 using IronFoundry.Warden.Configuration;
 using IronFoundry.Warden.Utilities;
+using IronFoundry.Warden.Containers.Messages;
+using System.Collections.Generic;
+using System;
+using System.IO;
 
 namespace IronFoundry.Warden.Containers
 {
@@ -41,16 +45,38 @@ namespace IronFoundry.Warden.Containers
             JobObject.TerminateProcessesAndWait(TerminateWaitTimeout);
             JobObject.Dispose();
 
-            Directory.Delete();
-            User.Delete();
+            try
+            {
+                Directory.Delete();
+            }
+            catch (IOException)
+            {
+            }
+
+            try
+            {
+                User.Delete();
+            }
+            catch (System.Exception)
+            {   
+                // TODO: Add logging for cleanup case
+            }
+
             if (AssignedPort.HasValue)
             {
-                LocalTcpPortManager.ReleaseLocalPort(AssignedPort.Value, User.UserName);
+                try
+                {
+                    LocalTcpPortManager.ReleaseLocalPort(AssignedPort.Value, User.UserName);
+                }
+                catch (Exception)
+                {
+                    // TODO: Log
+                }
             }
         }
 
         public static IResourceHolder Create(IWardenConfig config)
-        {
+        {   
             var handle = new ContainerHandle();
             var user = ContainerUser.CreateUser(handle, new LocalPrincipalManager(new DesktopPermissionManager()));
             var directory = new ContainerDirectory(handle, user, config.ContainerBasePath, true);
@@ -69,7 +95,7 @@ namespace IronFoundry.Warden.Containers
         public static IResourceHolder CreateForDestroy(IWardenConfig config, ContainerHandle handle)
         {
             var user = new TempUser(handle, new LocalPrincipalManager(new DesktopPermissionManager()));
-            var directory = new ContainerDirectory(handle, user, config.ContainerBasePath, true);
+            var directory = new TempDirectory(handle, config.ContainerBasePath, config.DeleteContainerDirectories);
             var localPortManager = new LocalTcpPortManager(new FirewallManager(), new NetShRunner());
             var resoureHolder = new ContainerResourceHolder(
                 handle,
@@ -102,6 +128,39 @@ namespace IronFoundry.Warden.Containers
             public void Delete()
             {
                 userManager.DeleteUser(UserName);
+            }
+        }
+
+        /// <summary>
+        /// Exists to create a temporary implementation primarily for deleting the directory.
+        /// </summary>
+        class TempDirectory : IContainerDirectory
+        {
+            private readonly string fullPath;
+            private readonly bool shouldDelete;
+
+            public TempDirectory(ContainerHandle handle, string containerBasePath, bool shouldDelete)
+            {
+                fullPath = Path.Combine(containerBasePath, handle);
+                this.shouldDelete = shouldDelete;
+            }
+
+            public string FullName
+            {
+                get { return fullPath; }
+            }
+
+            public void BindMounts(IEnumerable<BindMount> mounts)
+            {
+                throw new NotImplementedException();
+            }
+
+            public void Delete()
+            {
+                if (System.IO.Directory.Exists(fullPath) && shouldDelete)
+                {
+                    System.IO.Directory.Delete(fullPath, true);
+                }
             }
         }
     }

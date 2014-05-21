@@ -21,7 +21,7 @@
         private readonly DirectoryInfo containerDirectory;
         private readonly bool shouldDelete;
 
-        public ContainerDirectory(ContainerHandle handle, IContainerUser user, string containerBaseDirectory, bool shouldCreate = false, bool shouldDelete = true)        
+        public ContainerDirectory(ContainerHandle handle, IContainerUser user, string containerBaseDirectory, bool shouldCreate = false, bool shouldDelete = true)
         {
             if (handle == null)
                 throw new ArgumentNullException("handle");
@@ -29,7 +29,7 @@
             this.user = user;
             this.shouldDelete = shouldDelete;
 
-            this.containerDirectory = shouldCreate ? 
+            this.containerDirectory = shouldCreate ?
                 CreateContainerDirectory(containerBaseDirectory, handle, user) :
                 FindContainerDirectory(containerBaseDirectory, handle);
         }
@@ -158,6 +158,5 @@
                 ReplaceAllChildPermissions(di, security);
             }
         }
-
     }
 }

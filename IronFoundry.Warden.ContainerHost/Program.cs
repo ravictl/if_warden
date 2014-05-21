@@ -75,7 +75,10 @@ namespace IronFoundry.Warden.ContainerHost
             //Debugger.Launch();
             
             if (args.IsNullOrEmpty())
-                throw new InvalidOperationException("There must be a start or destroy command supplied");
+            {
+                Console.Error.WriteLine("There must be a start or destroy command supplied");
+                Environment.Exit(10);
+            }
 
             var argumentQueue = new Queue<string>(args);
 
@@ -109,7 +112,7 @@ namespace IronFoundry.Warden.ContainerHost
             options.Parse(args);
 
             if (String.IsNullOrWhiteSpace(handle))
-                throw new InvalidOperationException("Cannot start host, missing container handle.");
+                ExitWithError("Missing --handle option for starting container", 10);
 
             var jobObject = new JobObject(handle);
             var jobObjectLimits = new JobObjectLimits(jobObject);
@@ -239,13 +242,13 @@ namespace IronFoundry.Warden.ContainerHost
             options.Parse(args);
 
             if (string.IsNullOrWhiteSpace(handle))
-                throw new InvalidOperationException("Missing container handle for destroying container");
+                ExitWithError("Missing --handle option for destroying container", 10);
 
             if (string.IsNullOrWhiteSpace(containerBasePath))
-                throw new InvalidOperationException("Missing containerBasePath option");
+                ExitWithError("Missing --containerBasePath option", 10);
 
             if (string.IsNullOrWhiteSpace(tcpPort))
-                throw new InvalidOperationException("Missing tcpPort option");
+                ExitWithError("Missing --tcpPort option", 10);
 
             var config = new ContainerHostConfig()
             {
@@ -256,6 +259,12 @@ namespace IronFoundry.Warden.ContainerHost
             
             var holder = ContainerResourceHolder.Create(config, new ContainerHandle(handle));
             holder.Destroy();
+        }
+
+        private static void ExitWithError(string message, int exitCode)
+        {
+            Console.Error.WriteLine(message);
+            Environment.Exit(exitCode);            
         }
 
         private static CommandRunner BuildCommandRunner()

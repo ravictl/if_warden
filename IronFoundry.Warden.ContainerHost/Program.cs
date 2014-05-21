@@ -154,7 +154,7 @@ namespace IronFoundry.Warden.ContainerHost
                         TcpPort = 0,
                     };
 
-                    var containerDirectory = new ContainerDirectory(containerHandle, containerUser, false, containerHostConfig);
+                    var containerDirectory = new ContainerDirectory(containerHandle, containerUser, containerHostConfig.ContainerBasePath, false);
 
                     container.Initialize(
                         containerDirectory,
@@ -257,7 +257,7 @@ namespace IronFoundry.Warden.ContainerHost
                 DeleteContainerDirectories = deleteDirectories
             };
             
-            var holder = ContainerResourceHolder.Create(config, new ContainerHandle(handle));
+            var holder = ContainerResourceHolder.CreateForDestroy(config, new ContainerHandle(handle));
             holder.Destroy();
         }
 

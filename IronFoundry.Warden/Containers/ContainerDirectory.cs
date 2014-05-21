@@ -19,23 +19,19 @@
     {
         private readonly IContainerUser user;
         private readonly DirectoryInfo containerDirectory;
-        private readonly IWardenConfig wardenConfig;
+        private readonly bool shouldDelete;
 
-        public ContainerDirectory(ContainerHandle handle, IContainerUser user, bool shouldCreate = false) : this(handle, user, shouldCreate, new WardenConfig()) 
-        {
-        }
-
-        public ContainerDirectory(ContainerHandle handle, IContainerUser user, bool shouldCreate, IWardenConfig wardenConfig)
+        public ContainerDirectory(ContainerHandle handle, IContainerUser user, string containerBaseDirectory, bool shouldCreate = false, bool shouldDelete = true)        
         {
             if (handle == null)
                 throw new ArgumentNullException("handle");
 
             this.user = user;
-            this.wardenConfig = wardenConfig;
+            this.shouldDelete = shouldDelete;
 
             this.containerDirectory = shouldCreate ? 
-                CreateContainerDirectory(wardenConfig, handle, user) : 
-                FindContainerDirectory(wardenConfig, handle);
+                CreateContainerDirectory(containerBaseDirectory, handle, user) :
+                FindContainerDirectory(containerBaseDirectory, handle);
         }
 
         public string FullName
@@ -65,7 +61,7 @@
 
         public void Delete()
         {
-            if (wardenConfig.DeleteContainerDirectories)
+            if (shouldDelete)
             {
                 containerDirectory.Delete(true);
             }
@@ -85,9 +81,9 @@
         // TODO: Consolidate the various helper methods
         //
 
-        private static DirectoryInfo CreateContainerDirectory(IWardenConfig config, ContainerHandle handle, IContainerUser user)
+        private static DirectoryInfo CreateContainerDirectory(string containerBaseDirectory, ContainerHandle handle, IContainerUser user)
         {
-            var dirInfo = GetContainerDirectoryInfo(config, handle);
+            var dirInfo = GetContainerDirectoryInfo(containerBaseDirectory, handle);
 
             var inheritanceFlags = InheritanceFlags.ContainerInherit | InheritanceFlags.ObjectInherit;
             var accessRule = new FileSystemAccessRule(user.UserName, FileSystemRights.FullControl, inheritanceFlags,
@@ -101,9 +97,9 @@
             return Directory.CreateDirectory(containerDirectory, security);
         }
 
-        private static DirectoryInfo FindContainerDirectory(IWardenConfig config, ContainerHandle handle)
+        private static DirectoryInfo FindContainerDirectory(string containerBaseDirectory, ContainerHandle handle)
         {
-            var dirInfo = GetContainerDirectoryInfo(config, handle);
+            var dirInfo = GetContainerDirectoryInfo(containerBaseDirectory, handle);
             if (Directory.Exists(dirInfo.Item2))
             {
                 return new DirectoryInfo(dirInfo.Item2);
@@ -114,12 +110,11 @@
             }
         }
 
-        private static Tuple<DirectoryInfo, string> GetContainerDirectoryInfo(IWardenConfig config, ContainerHandle handle)
+        private static Tuple<DirectoryInfo, string> GetContainerDirectoryInfo(string containerBaseDirectory, ContainerHandle handle)
         {
-            string containerBasePath = config.ContainerBasePath;
-            string containerDirectory = Path.Combine(containerBasePath, handle);
+            string containerDirectory = Path.Combine(containerBaseDirectory, handle);
 
-            return new Tuple<DirectoryInfo, string>(new DirectoryInfo(containerBasePath), containerDirectory);
+            return new Tuple<DirectoryInfo, string>(new DirectoryInfo(containerBaseDirectory), containerDirectory);
         }
 
         private void AddAccessRuleTo(FileSystemAccessRule accessRule, string path)

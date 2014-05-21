@@ -23,8 +23,10 @@ namespace IronFoundry.Warden.Containers
             where TResult : JsonRpcResponse;
     }
 
-    public class ContainerHostLauncher : IDisposable, IContainerHostLauncher
+    public class ContainerHostLauncher : IDisposable, IContainerHostLauncher, IContainerJanitor
     {
+        private const int CleanUpWaitTime = 10000;
+
         string hostExe = "IronFoundry.Warden.ContainerHost.exe";
         Process hostProcess;
         MessageTransport messageTransport;
@@ -77,6 +79,7 @@ namespace IronFoundry.Warden.Containers
             if (hostProcess == null)
             {
                 var argumentBuilder = new StringBuilder();
+                argumentBuilder.Append("start ");
                 argumentBuilder.AppendFormat("--handle {0}", jobObjectName);
 
                 var hostFullPath = Path.Combine(Directory.GetCurrentDirectory(), hostExe);
@@ -140,6 +143,30 @@ namespace IronFoundry.Warden.Containers
             where TResult : JsonRpcResponse
         {
             return await messagingClient.SendMessageAsync<T, TResult>(request);
+        }
+
+        public Task DestroyContainerAsync(string handle, string containerBasePath, string tcpPort, bool deleteDirectories)
+        {
+            var argumentBuilder = new StringBuilder();
+            argumentBuilder.Append("destroy ");
+            argumentBuilder.AppendFormat("--handle {0}", handle);
+            argumentBuilder.AppendFormat("--containerBasePath {0}", containerBasePath);
+            argumentBuilder.AppendFormat("--tcpPort {0}", tcpPort);
+            if (deleteDirectories)
+                argumentBuilder.AppendFormat("--deleteDirectories");
+
+            var hostFullPath = Path.Combine(Directory.GetCurrentDirectory(), hostExe);
+            var startInfo = new ProcessStartInfo(hostFullPath, argumentBuilder.ToString());
+
+            using (var process = Process.Start(startInfo))
+            {
+                if (!process.WaitForExit(CleanUpWaitTime))
+                {
+                    throw new Exception("An error ocurred launching the cleanup process");
+                }
+            }
+
+            return null;
         }
     }
 }

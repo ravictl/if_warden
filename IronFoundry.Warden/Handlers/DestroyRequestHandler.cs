@@ -41,8 +41,10 @@
                                 log.WarnException(ex);
                             }
                         }
-                        await containerManager.DestroyContainerAsync(container);
                     }
+
+                    await containerManager.DestroyContainerAsync(new ContainerHandle(request.Handle));
+
                     return new DestroyResponse();
                 });
 

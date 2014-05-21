@@ -120,13 +120,6 @@ namespace IronFoundry.Warden.Test
             }
 
             [Fact]
-            public async void DestroyDoesNotSendToStub()
-            {
-                await proxy.DestroyAsync();
-                this.launcher.DidNotReceive(x => x.SendMessageAsync<ContainerDestroyRequest, ContainerDestroyResponse>(Arg.Any<ContainerDestroyRequest>()));
-            }
-
-            [Fact]
             public async void LimitMemoryDoesNotSendToStub()
             {
                 await proxy.LimitMemoryAsync(1024);
@@ -234,39 +227,6 @@ namespace IronFoundry.Warden.Test
                 await CompleteInitializationAsync();
 
                 Assert.Equal(containerHandle, proxy.Handle.ToString());
-            }
-
-            [Fact]
-            public async void RemovesResourcesOnDestroy()
-            {
-                await CompleteInitializationAsync();
-
-                await proxy.DestroyAsync();
-
-                this.resourceHolder.Received(x => x.Destroy());
-            }
-
-            [Fact]
-            public async void SendsDestroyMessageToStubOnDestroy()
-            {
-                await CompleteInitializationAsync();
-
-                await proxy.DestroyAsync();
-
-                launcher.Received(x => x.SendMessageAsync<ContainerDestroyRequest, ContainerDestroyResponse>(Arg.Any<ContainerDestroyRequest>()));
-            }
-
-            [Fact]
-            public async void DestroySetsStateToDestroy()
-            {
-                await CompleteInitializationAsync();
-                launcher.IsActive.Returns(false);
-
-                await proxy.DestroyAsync();
-
-                var info = await proxy.GetInfoAsync();
-
-                Assert.Equal(ContainerState.Destroyed, info.State);
             }
 
             [Fact]

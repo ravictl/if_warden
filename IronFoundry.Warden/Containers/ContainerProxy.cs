@@ -113,22 +113,6 @@ namespace IronFoundry.Warden.Containers
                    };
         }
 
-        public async Task DestroyAsync()
-        {
-            if (IsRemoteActive)
-            {
-                var request = new ContainerDestroyRequest();
-                var response = await launcher.SendMessageAsync<ContainerDestroyRequest, ContainerDestroyResponse>(request);
-            }
-
-            if (cachedContainerState != ContainerState.Destroyed && containerResources != null)
-            {
-                containerResources.Destroy();
-            }
-
-            cachedContainerState = ContainerState.Destroyed;
-        }
-
         public async Task EnableLoggingAsync(InstanceLoggingInfo loggingInfo)
         {
             if (IsRemoteActive)
@@ -235,16 +219,5 @@ namespace IronFoundry.Warden.Containers
         {
             throw new NotImplementedException();
         }
-
-        internal static void CleanUp(string handle)
-        {
-            // this creates a temporary set of resources to make sure we clean up
-            var holder = ContainerResourceHolder.Create(new WardenConfig(), new ContainerHandle(handle));
-            holder.Destroy();
-        }
-
-
-
-   
     }
 }

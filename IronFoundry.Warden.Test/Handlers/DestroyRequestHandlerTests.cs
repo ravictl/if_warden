@@ -53,8 +53,7 @@ namespace IronFoundry.Warden.Handlers
             var handler = new DestroyRequestHandler(manager, request);
 
             var response = await handler.HandleAsync();
-
-            manager.Received(1, x => x.DestroyContainerAsync(container));
+            manager.Received(1, x => x.DestroyContainerAsync(Arg.Is<ContainerHandle>(h => h.ToString() == "containerHandle")));
         }
     }
 }

@@ -13,7 +13,6 @@ namespace IronFoundry.Warden.Containers
     {
         private readonly IContainerHostLauncher launcher;
         private ContainerState cachedContainerState;
-        private IResourceHolder containerResources;
         private readonly List<string> events = new List<string>();
         private object eventLock = new object();
 
@@ -40,15 +39,8 @@ namespace IronFoundry.Warden.Containers
             get { return !launcher.IsActive && launcher.WasActive; }
         }
 
-        public string ContainerDirectoryPath
-        {
-            get { return containerResources.Directory.FullName; }
-        }
-
-        public ContainerHandle Handle
-        {
-            get { return containerResources.Handle; }
-        }
+        public string ContainerDirectoryPath { get; private set; }
+        public ContainerHandle Handle { get; private set; }
 
         public int? AssignedPort { get; private set; }
 
@@ -119,12 +111,12 @@ namespace IronFoundry.Warden.Containers
             }
         }
 
-        public Task InitializeAsync(IResourceHolder resources)
+        public async Task InitializeAsync(string baseDirectory, string handle)
         {
-            containerResources = resources;
-            launcher.Start(ContainerDirectoryPath, containerResources.Handle.ToString());
+            this.Handle = new ContainerHandle(handle);
+            launcher.Start(baseDirectory, handle);
 
-            return InvokeRemoteInitializeAsync();
+            this.ContainerDirectoryPath = await InvokeRemoteInitializeAsync(baseDirectory);
         }
 
         public async Task LimitMemoryAsync(ulong bytes)
@@ -203,18 +195,18 @@ namespace IronFoundry.Warden.Containers
             }
         }
 
-        private async Task InvokeRemoteInitializeAsync()
+        private async Task<string> InvokeRemoteInitializeAsync(string baseDirectory)
         {
             var request = new ContainerInitializeRequest(
                 new ContainerInitializeParameters
                 {
-                    containerDirectoryPath = ContainerDirectoryPath,
+                    containerBaseDirectoryPath = baseDirectory,
                     containerHandle = Handle.ToString(),
-                    userName = containerResources.User.GetCredential().UserName,
-                    userPassword = containerResources.User.GetCredential().SecurePassword
                 });
 
             var response = await launcher.SendMessageAsync<ContainerInitializeRequest, ContainerInitializeResponse>(request);
+
+            return response.result;
         }
 
         public static IContainerClient Restore(string handle, ContainerState containerState)

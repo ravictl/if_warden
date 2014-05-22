@@ -144,24 +144,16 @@ namespace IronFoundry.Warden.ContainerHost
                 dispatcher.RegisterMethod<ContainerInitializeRequest>(ContainerInitializeRequest.MethodName, (r) =>
                 {
                     var containerHandle = new ContainerHandle(r.@params.containerHandle);
-                    var containerUser = new ContainerUser(r.@params.userName, r.@params.userPassword);
+                    var containerUser = ContainerUser.CreateUser(containerHandle, new LocalPrincipalManager(new DesktopPermissionManager()));
 
-                    // This is temporary until we can move the initialization of the container resources to ContainerHost
-                    var containerHostConfig = new ContainerHostConfig
-                    {
-                        ContainerBasePath = new DirectoryInfo(r.@params.containerDirectoryPath).Parent.FullName,
-                        DeleteContainerDirectories = true,
-                        TcpPort = 0,
-                    };
-
-                    var containerDirectory = new ContainerDirectory(containerHandle, containerUser, containerHostConfig.ContainerBasePath, false);
+                    var containerDirectory = new ContainerDirectory(containerHandle, containerUser, r.@params.containerBaseDirectoryPath, true);
 
                     container.Initialize(
                         containerDirectory,
                         containerHandle,
                         containerUser);
 
-                    return Task.FromResult<object>(new ContainerInitializeResponse(r.id));
+                    return Task.FromResult<object>(new ContainerInitializeResponse(r.id, containerDirectory.FullName));
                 });
 
                 dispatcher.RegisterMethod<ContainerStateRequest>(ContainerStateRequest.MethodName, (r) =>

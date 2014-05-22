@@ -32,7 +32,7 @@ namespace IronFoundry.Warden.Test
 
             public ProxyContainerContext()
             {
-                this.launcher = Substitute.For<IContainerHostLauncher>();
+                this.launcher = Substitute.For<IContainerHostLauncher, IDisposable>();
                 this.launcher.When(x => x.Start(null, null));
 
                 var userInfo = Substitute.For<IContainerUser>();
@@ -126,7 +126,41 @@ namespace IronFoundry.Warden.Test
                 this.launcher.DidNotReceive(x => x.SendMessageAsync<LimitMemoryRequest, LimitMemoryResponse>(Arg.Any<LimitMemoryRequest>()));
             }
         }
-        
+
+        public class OnStop: ProxyContainerContext
+        {
+            public OnStop()
+            {
+                launcher.IsActive.Returns(true);
+            }
+
+            async Task CompleteInitializationAsync()
+            {
+                await proxy.InitializeAsync(resourceHolder);
+            }
+
+
+            [Fact]
+            public async void SendsStopMessageToStub()
+            {
+                await CompleteInitializationAsync();
+
+                await proxy.StopAsync(false);
+
+                launcher.Received(x => x.SendMessageAsync<StopRequest, StopResponse>(Arg.Any<StopRequest>()));
+            }
+
+            [Fact]
+            public async void StopsLauncher()
+            {
+                await CompleteInitializationAsync();
+
+                await proxy.StopAsync(false);
+
+                launcher.Received(x => x.Stop());
+            }
+        }
+
         public class WhenInitialized : ProxyContainerContext
         {
             public WhenInitialized() : base()
@@ -177,7 +211,6 @@ namespace IronFoundry.Warden.Test
                 await CompleteInitializationAsync();
 
                 Assert.Equal(tempDirectory, initializationParams.containerDirectoryPath);
-
             }
 
             [Fact]
@@ -229,15 +262,7 @@ namespace IronFoundry.Warden.Test
                 Assert.Equal(containerHandle, proxy.Handle.ToString());
             }
 
-            [Fact]
-            public async void StopSendsStopMessageToStub()
-            {
-                await CompleteInitializationAsync();
-
-                await proxy.StopAsync(false);
-
-                launcher.Received(x => x.SendMessageAsync<StopRequest, StopResponse>(Arg.Any<StopRequest>()));
-            }
+        
 
             [Fact]
             public async void EnableLoggingAsyncSendsMessageToHost()

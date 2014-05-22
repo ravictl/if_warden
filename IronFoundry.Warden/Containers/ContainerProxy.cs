@@ -74,6 +74,7 @@ namespace IronFoundry.Warden.Containers
             {
                 var response = await launcher.SendMessageAsync<ContainerInfoRequest, ContainerInfoResponse>(new ContainerInfoRequest());
                 info = response.result;
+
             }
             else
             {
@@ -88,10 +89,10 @@ namespace IronFoundry.Warden.Containers
             }
 
             info.Events.AddRange(DrainEvents());
-            
+
             return info;
         }
-        
+
         public async Task<CommandResult> RunCommandAsync(RemoteCommand command)
         {
             if (!IsRemoteActive) throw NotActiveError();
@@ -157,7 +158,10 @@ namespace IronFoundry.Warden.Containers
         public async Task StopAsync(bool kill)
         {
             if (IsRemoteActive)
+            {
                 await launcher.SendMessageAsync<StopRequest, StopResponse>(new StopRequest(kill));
+                launcher.Stop();
+            }
 
             cachedContainerState = ContainerState.Stopped;
         }

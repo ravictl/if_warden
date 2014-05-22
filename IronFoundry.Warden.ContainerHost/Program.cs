@@ -186,14 +186,6 @@ namespace IronFoundry.Warden.ContainerHost
 
                 });
 
-                dispatcher.RegisterMethod<ContainerDestroyRequest>(ContainerDestroyRequest.MethodName, (r) =>
-                {
-                    container.Destroy();
-                    container = null;
-
-                    return Task.FromResult<object>(new ContainerDestroyResponse(r.id));
-                });
-
                 dispatcher.RegisterMethod<EnableLoggingRequest>(EnableLoggingRequest.MethodName, (r) =>
                 {
                     var containerEmitter = new ContainerLogEmitter(r.@params);

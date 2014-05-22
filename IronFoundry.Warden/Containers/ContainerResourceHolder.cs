@@ -62,15 +62,6 @@ namespace IronFoundry.Warden.Containers
             {
             }
 
-            try
-            {
-                User.Delete();
-            }
-            catch (System.Exception)
-            {   
-                // TODO: Add logging for cleanup case
-            }
-
             if (AssignedPort.HasValue)
             {
                 try
@@ -81,6 +72,15 @@ namespace IronFoundry.Warden.Containers
                 {
                     // TODO: Log
                 }
+            }
+
+            try
+            {
+                User.Delete();
+            }
+            catch (System.Exception)
+            {
+                // TODO: Add logging for cleanup case
             }
         }
 

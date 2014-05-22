@@ -18,6 +18,7 @@ namespace IronFoundry.Warden.Containers
         bool WasActive { get; }
         int? LastExitCode { get; }
         void Start(string workingDirectory, string jobObjectName);
+        void Stop();
         Task<TResult> SendMessageAsync<T, TResult>(T request)
             where T : JsonRpcRequest
             where TResult : JsonRpcResponse;
@@ -25,7 +26,7 @@ namespace IronFoundry.Warden.Containers
 
     public class ContainerHostLauncher : IDisposable, IContainerHostLauncher, IContainerJanitor
     {
-        private const int CleanUpWaitTime = 10000;
+        private const int CleanUpWaitTime = 60000;
 
         string hostExe = "IronFoundry.Warden.ContainerHost.exe";
         Process hostProcess;
@@ -51,16 +52,7 @@ namespace IronFoundry.Warden.Containers
 
         public virtual void Dispose()
         {
-            DisposeMessageHandling();
-
-            if (hostProcess != null)
-            {
-                if (!hostProcess.HasExited)
-                    hostProcess.SafeKill();
-
-                hostProcess.Dispose();
-                hostProcess = null;
-            }
+            Stop();
         }
 
         public virtual int? LastExitCode
@@ -114,6 +106,22 @@ namespace IronFoundry.Warden.Containers
             }
         }
 
+        public virtual void Stop()
+        {
+            var hostCapture = hostProcess;
+            hostProcess = null;
+
+            DisposeMessageHandling();
+
+            if (hostCapture != null)
+            {
+                if (!hostCapture.HasExited)
+                    hostCapture.SafeKill();
+
+                hostCapture.Dispose();
+            }
+        }
+
         protected virtual void OnHostStopped(int exitCode)
         {
             var handlers = HostStopped;
@@ -149,9 +157,9 @@ namespace IronFoundry.Warden.Containers
         {
             var argumentBuilder = new StringBuilder();
             argumentBuilder.Append("destroy ");
-            argumentBuilder.AppendFormat("--handle {0}", handle);
-            argumentBuilder.AppendFormat("--containerBasePath {0}", containerBasePath);
-            argumentBuilder.AppendFormat("--tcpPort {0}", tcpPort);
+            argumentBuilder.AppendFormat("--handle {0} ", handle);
+            argumentBuilder.AppendFormat("--containerBasePath {0} ", containerBasePath);
+            argumentBuilder.AppendFormat("--tcpPort {0} ", tcpPort);
             if (deleteDirectories)
                 argumentBuilder.AppendFormat("--deleteDirectories");
 
@@ -162,11 +170,12 @@ namespace IronFoundry.Warden.Containers
             {
                 if (!process.WaitForExit(CleanUpWaitTime))
                 {
-                    throw new Exception("An error ocurred launching the cleanup process");
+                    process.Kill();
+                    throw new TimeoutException("The container cleanup process did not exit in a timely fashion.");
                 }
             }
 
-            return null;
+            return Task.FromResult<object>(null);
         }
     }
 }

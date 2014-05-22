@@ -59,7 +59,6 @@
     <Compile Include="Containers\ContainerHostLauncher.cs" />
     <Compile Include="Containers\JobObjectLimits.cs" />
     <Compile Include="Containers\Messages\BindMountMessage.cs" />
-    <Compile Include="Containers\Messages\ContainerDestroyMessage.cs" />
     <Compile Include="Containers\Messages\ContainerInfoMessage.cs" />
     <Compile Include="Containers\Messages\ContainerInitializeMessage.cs" />
     <Compile Include="Containers\Messages\ContainerStateMessage.cs" />

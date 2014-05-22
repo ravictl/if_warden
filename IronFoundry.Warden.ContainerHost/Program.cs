@@ -73,7 +73,7 @@ namespace IronFoundry.Warden.ContainerHost
         static void Main(string[] args)
         {
             //Debugger.Launch();
-            
+
             if (args.IsNullOrEmpty())
             {
                 Console.Error.WriteLine("There must be a start or destroy command supplied");
@@ -84,7 +84,7 @@ namespace IronFoundry.Warden.ContainerHost
 
             var command = argumentQueue.Dequeue();
 
-            switch(command.ToLowerInvariant())
+            switch (command.ToLowerInvariant())
             {
                 case "start":
                     Start(argumentQueue);
@@ -200,6 +200,12 @@ namespace IronFoundry.Warden.ContainerHost
                     return Task.FromResult<object>(new LimitMemoryResponse(r.id));
                 });
 
+                dispatcher.RegisterMethod<ReservePortRequest>(ReservePortRequest.MethodName, r =>
+                {
+                    var reservedPort = container.ReservePort(r.@params);
+                    return Task.FromResult<object>(new ReservePortResponse(r.id, reservedPort));
+                });
+
                 dispatcher.RegisterMethod<StopRequest>(StopRequest.MethodName, r =>
                 {
                     container.Stop(r.@params.Kill);
@@ -245,10 +251,10 @@ namespace IronFoundry.Warden.ContainerHost
             var config = new ContainerHostConfig()
             {
                 ContainerBasePath = containerBasePath,
-                TcpPort = ushort.Parse(tcpPort), 
+                TcpPort = ushort.Parse(tcpPort),
                 DeleteContainerDirectories = deleteDirectories
             };
-            
+
             var holder = ContainerResourceHolder.CreateForDestroy(config, new ContainerHandle(handle));
             holder.Destroy();
         }
@@ -256,7 +262,7 @@ namespace IronFoundry.Warden.ContainerHost
         private static void ExitWithError(string message, int exitCode)
         {
             Console.Error.WriteLine(message);
-            Environment.Exit(exitCode);            
+            Environment.Exit(exitCode);
         }
 
         private static CommandRunner BuildCommandRunner()

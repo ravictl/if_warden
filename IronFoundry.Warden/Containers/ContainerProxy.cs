@@ -16,6 +16,7 @@ namespace IronFoundry.Warden.Containers
         private IResourceHolder containerResources;
         private readonly List<string> events = new List<string>();
         private object eventLock = new object();
+        private int? cachedPortReservation;
 
         private static readonly Dictionary<int, string> exitMessageMap = new Dictionary<int, string>()
         {
@@ -145,14 +146,15 @@ namespace IronFoundry.Warden.Containers
             return new InvalidOperationException("The container proxy is not active.");
         }
 
-        public int ReservePort(int requestedPort)
+        public async Task<int> ReservePortAsync(int requestedPort)
         {
-            if (!containerResources.AssignedPort.HasValue)
-            {
-                containerResources.AssignedPort = containerResources.LocalTcpPortManager.ReserveLocalPort((ushort)requestedPort, ContainerUserName);
-            }
+            if (cachedPortReservation.HasValue)
+                return cachedPortReservation.Value;
 
-            return containerResources.AssignedPort.Value;
+            var request = new ReservePortRequest(requestedPort);
+            var response = await launcher.SendMessageAsync<ReservePortRequest, ReservePortResponse>(request);
+            cachedPortReservation = response.result;
+            return response.result;
         }
 
         public async Task StopAsync(bool kill)

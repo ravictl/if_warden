@@ -18,7 +18,7 @@ namespace IronFoundry.Warden.Containers
         Task<ContainerInfo> GetInfoAsync();
         Task InitializeAsync(IResourceHolder containerResources);
         Task LimitMemoryAsync(ulong bytes);
-        int ReservePort(int port);
+        Task<int> ReservePortAsync(int port);
         Task<CommandResult> RunCommandAsync(RemoteCommand command);
         Task StopAsync(bool kill);
     }

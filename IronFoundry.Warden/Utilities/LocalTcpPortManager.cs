@@ -9,6 +9,10 @@ namespace IronFoundry.Warden.Utilities
         private readonly Logger log = LogManager.GetCurrentClassLogger();
         private readonly INetShRunner netShRunner;
 
+        public LocalTcpPortManager()
+            : this(new FirewallManager(), new NetShRunner())
+        { }
+
         public LocalTcpPortManager(IFirewallManager firewallManager, INetShRunner netShRunner)
         {
             this.netShRunner = netShRunner;

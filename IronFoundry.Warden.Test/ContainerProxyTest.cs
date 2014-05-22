@@ -485,6 +485,26 @@ namespace IronFoundry.Warden.Test
 
                 Assert.Equal(reservedPort, nextReservation);
             }
+
+            [Fact]
+            public void PriorToReservationPropertyReturnsNull()
+            {
+                Assert.Null(proxy.AssignedPort);    
+            }
+
+            [Fact]
+            public async void ReservedPortAvailableFromProperty()
+            {
+                var request = new ReservePortRequest(100);
+
+                launcher.SendMessageAsync<ReservePortRequest, ReservePortResponse>(Arg.Any<ReservePortRequest>())
+                    .ReturnsTask(new ReservePortResponse("", 200));
+
+                var reservedPort = await proxy.ReservePortAsync(100);
+
+                Assert.Equal(200, proxy.AssignedPort);
+            }
+
         }
 
         public class WhenLauncherEndsAfterInitialize : ProxyContainerContext

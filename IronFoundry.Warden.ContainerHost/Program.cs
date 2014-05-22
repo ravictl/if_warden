@@ -229,11 +229,13 @@ namespace IronFoundry.Warden.ContainerHost
             string containerBasePath = null;
             string tcpPort = null;
             bool deleteDirectories = true;
+            short? containerPort = null;
 
             var options = new NDesk.Options.OptionSet {
                 { "handle=", v => handle = v },
                 { "containerBasePath=", v => containerBasePath = v},
                 { "tcpPort=", v => tcpPort = v },
+                { "containerPort=", v => containerPort = short.Parse(v) },
                 { "deleteDirectories", v => { if (v != null)  deleteDirectories = true; } },
             };
 
@@ -255,7 +257,7 @@ namespace IronFoundry.Warden.ContainerHost
                 DeleteContainerDirectories = deleteDirectories
             };
 
-            var holder = ContainerResourceHolder.CreateForDestroy(config, new ContainerHandle(handle));
+            var holder = ContainerResourceHolder.CreateForDestroy(config, new ContainerHandle(handle), (ushort)containerPort);
             holder.Destroy();
         }
 

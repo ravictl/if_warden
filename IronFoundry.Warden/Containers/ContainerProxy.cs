@@ -16,7 +16,6 @@ namespace IronFoundry.Warden.Containers
         private IResourceHolder containerResources;
         private readonly List<string> events = new List<string>();
         private object eventLock = new object();
-        private int? cachedPortReservation;
 
         private static readonly Dictionary<int, string> exitMessageMap = new Dictionary<int, string>()
         {
@@ -29,11 +28,6 @@ namespace IronFoundry.Warden.Containers
             this.launcher.HostStopped += HostStoppedHandler;
 
             cachedContainerState = ContainerState.Born;
-        }
-
-        private string ContainerUserName
-        {
-            get { return containerResources.User.UserName; }
         }
 
         private bool IsRemoteActive
@@ -55,6 +49,8 @@ namespace IronFoundry.Warden.Containers
         {
             get { return containerResources.Handle; }
         }
+
+        public int? AssignedPort { get; private set; }
 
         public async Task BindMountsAsync(IEnumerable<BindMount> mounts)
         {
@@ -148,12 +144,12 @@ namespace IronFoundry.Warden.Containers
 
         public async Task<int> ReservePortAsync(int requestedPort)
         {
-            if (cachedPortReservation.HasValue)
-                return cachedPortReservation.Value;
+            if (AssignedPort.HasValue)
+                return AssignedPort.Value;
 
             var request = new ReservePortRequest(requestedPort);
             var response = await launcher.SendMessageAsync<ReservePortRequest, ReservePortResponse>(request);
-            cachedPortReservation = response.result;
+            AssignedPort = response.result;
             return response.result;
         }
 

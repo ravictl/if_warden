@@ -26,6 +26,7 @@ namespace IronFoundry.Warden.Containers
         private readonly ProcessMonitor processMonitor;
         private readonly int owningProcessId;
         private readonly ILocalTcpPortManager portManager;
+        private readonly FileSystemManager fileSystemManager;
 
         public ContainerStub(
             JobObject jobObject,
@@ -33,7 +34,8 @@ namespace IronFoundry.Warden.Containers
             ICommandRunner commandRunner,
             ProcessHelper processHelper,
             ProcessMonitor processMonitor,
-            ILocalTcpPortManager portManager)
+            ILocalTcpPortManager portManager,
+            FileSystemManager fileSystemManager)
             : this(
                      jobObject,
                      jobObjectLimits,
@@ -41,7 +43,8 @@ namespace IronFoundry.Warden.Containers
                      processHelper,
                      processMonitor,
                      Process.GetCurrentProcess().Id,
-                     portManager)
+                     portManager,
+                     fileSystemManager)
         {
         }
 
@@ -52,7 +55,8 @@ namespace IronFoundry.Warden.Containers
             ProcessHelper processHelper,
             ProcessMonitor processMonitor,
             int owningProcessId,
-            ILocalTcpPortManager portManager)
+            ILocalTcpPortManager portManager,
+            FileSystemManager fileSystemManager)
         {
             this.jobObject = jobObject;
             this.jobObjectLimits = jobObjectLimits;
@@ -62,6 +66,7 @@ namespace IronFoundry.Warden.Containers
             this.processMonitor = processMonitor;
             this.owningProcessId = owningProcessId;
             this.portManager = portManager;
+            this.fileSystemManager = fileSystemManager;
 
             this.jobObjectLimits.MemoryLimitReached += MemoryLimitReached;
 
@@ -262,6 +267,13 @@ namespace IronFoundry.Warden.Containers
             ThrowIfNotActive();
 
             return portManager.ReserveLocalPort((ushort)requestedPort, user.UserName);
+        }
+
+        public void Copy(CopyInfo info)
+        {
+            ThrowIfNotActive();
+
+            fileSystemManager.Copy(info.Source, info.Destination);
         }
 
         public void Stop(bool kill)

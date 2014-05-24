@@ -34,7 +34,7 @@
 
         public override Task<Response> HandleAsync()
         {
-            var copyResponse = Task.FromResult<Response>(response);
+            var copyResponse = Task.FromResult(response);
 
             log.Trace("SrcPath: '{0}' DstPath: '{1}'", request.SrcPath, request.DstPath);
 

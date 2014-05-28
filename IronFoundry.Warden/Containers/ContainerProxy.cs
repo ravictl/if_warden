@@ -97,18 +97,18 @@ namespace IronFoundry.Warden.Containers
                     }));
 
             return new CommandResult
-                   {
-                       ExitCode = response.result.exitCode,
-                       StdOut = response.result.stdOut,
-                       StdErr = response.result.stdErr,
-                   };
+            {
+                ExitCode = response.result.exitCode,
+                StdOut = response.result.stdOut,
+                StdErr = response.result.stdErr,
+            };
         }
 
         public async Task EnableLoggingAsync(InstanceLoggingInfo loggingInfo)
         {
             if (IsRemoteActive)
             {
-                var enableResponse = await launcher.SendMessageAsync<EnableLoggingRequest, EnableLoggingResponse>(new EnableLoggingRequest { @params = loggingInfo });
+                await launcher.SendMessageAsync<EnableLoggingRequest, EnableLoggingResponse>(new EnableLoggingRequest { @params = loggingInfo });
             }
         }
 
@@ -146,6 +146,12 @@ namespace IronFoundry.Warden.Containers
             return response.result;
         }
 
+        public async Task CopyAsync(string source, string destination)
+        {
+            var request = new CopyRequest(new CopyInfo(source, destination));
+            await launcher.SendMessageAsync<CopyRequest, CopyResponse>(request);
+        }
+
         public async Task StopAsync(bool kill)
         {
             if (IsRemoteActive)
@@ -172,12 +178,6 @@ namespace IronFoundry.Warden.Containers
             var disposable = launcher as IDisposable;
             if (disposable != null)
                 disposable.Dispose();
-        }
-
-        private async Task<string> GetRemoteContainerState()
-        {
-            var response = await launcher.SendMessageAsync<ContainerStateRequest, ContainerStateResponse>(new ContainerStateRequest());
-            return response.result;
         }
 
         private void HostStoppedHandler(object sender, int exitCode)

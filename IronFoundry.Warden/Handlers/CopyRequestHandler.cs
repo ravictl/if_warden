@@ -16,7 +16,7 @@
         private readonly ICopyRequest request;
         private readonly Response response;
 
-        public CopyRequestHandler(IContainerManager containerManager, Request request, Response response)
+        protected CopyRequestHandler(IContainerManager containerManager, Request request, Response response)
             : base(containerManager, request)
         {
             if (request == null)

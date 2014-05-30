@@ -214,7 +214,7 @@ namespace IronFoundry.Warden.ContainerHost
                     async (request) =>
                     {
                         var response = await dispatcher.DispatchAsync(request);
-                        await transport.PublishAsync(response);
+                        await transport.PublishResponseAsync(response);
                     });
 
                 exitEvent.WaitOne();

@@ -94,10 +94,11 @@ namespace IronFoundry.Warden.Containers
                 hostProcess.Start();
 
                 messageTransport = new MessageTransport(hostProcess.StandardOutput, hostProcess.StandardInput);
-                messagingClient = new MessagingClient(message =>
+                messagingClient = new MessagingClient(async message =>
                 {
-                    messageTransport.PublishAsync(message).GetAwaiter().GetResult();
+                    await messageTransport.PublishRequestAsync(message);
                 });
+
                 messageTransport.SubscribeResponse(message =>
                 {
                     messagingClient.PublishResponse(message);

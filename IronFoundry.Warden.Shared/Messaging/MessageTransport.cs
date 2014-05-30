@@ -15,6 +15,8 @@ namespace IronFoundry.Warden.Shared.Messaging
         private TextWriter writer;
         private List<Func<JObject, Task>> requestCallbacks = new List<Func<JObject, Task>>();
         private List<Func<JObject, Task>> responseCallbacks = new List<Func<JObject, Task>>();
+        private List<Func<JObject, Task>> eventSubscribers = new List<Func<JObject, Task>>();
+
         private List<Action<Exception>> errorSubscribers = new List<Action<Exception>>();
         private CancellationTokenSource tokenSource = new CancellationTokenSource();
         private volatile Task readTask;
@@ -25,8 +27,7 @@ namespace IronFoundry.Warden.Shared.Messaging
             Unknown,
             Request,
             Response,
-            Event,
-            Error
+            Event
         }
 
         public MessageTransport(TextReader reader, TextWriter writer)
@@ -87,6 +88,9 @@ namespace IronFoundry.Warden.Shared.Messaging
                 case ContentType.Response:
                     await InvokeResponseCallbackAsync((JObject)body);
                     break;
+                case ContentType.Event:
+                    await InvokeEventCallbackAsync((JObject)body);
+                    break;
                 default:
                     InvokeErrors(new InvalidOperationException("Received currently unsupported content-type"));
                     break;
@@ -146,6 +150,21 @@ namespace IronFoundry.Warden.Shared.Messaging
             }
         }
 
+        private async Task InvokeEventCallbackAsync(JObject message)
+        {
+            List<Func<JObject, Task>> subscribers = new List<Func<JObject, Task>>();
+
+            lock (eventSubscribers)
+            {
+                subscribers.AddRange(eventSubscribers);
+            }
+
+            foreach (var subscriber in subscribers)
+            {
+                await subscriber(message);
+            }
+        }
+
         private void InvokeErrors(Exception e)
         {
             lock (errorSubscribers)
@@ -163,7 +182,7 @@ namespace IronFoundry.Warden.Shared.Messaging
             }
         }
 
-        public async Task PublishAsync(JObject message)
+        private async Task PublishAsync(JObject message)
         {
             string text = message.ToString(Formatting.None);
             using(var releaser = await writeLock.LockAsync())
@@ -182,6 +201,12 @@ namespace IronFoundry.Warden.Shared.Messaging
         {
             var response = WrapMessage(ContentType.Response, message);
             return PublishAsync(response);
+        }
+
+        public Task PublishEventAsync(JObject message)
+        {
+            var @event = WrapMessage(ContentType.Event, message);
+            return PublishAsync(@event);
         }
 
         public void Start()
@@ -213,6 +238,14 @@ namespace IronFoundry.Warden.Shared.Messaging
             lock (responseCallbacks)
             {
                 responseCallbacks.Add(callback);
+            }
+        }
+
+        public void SubscribeEvent(Func<JObject, Task> callback)
+        {
+            lock (eventSubscribers)
+            {
+                eventSubscribers.Add(callback);
             }
         }
 

@@ -68,6 +68,28 @@ namespace IronFoundry.Warden.Test.ContainerHost
             }
         }
 
+
+        [Fact]
+        public async void PublishedEventSendsWrappedEventToTextWriter()
+        {
+            var outputSink = new TaskCompletionSource<string>();
+            var outputWriter = Substitute.For<TextWriter>();
+            outputWriter.When(x => x.WriteLine(Arg.Any<string>())).Do(callInfo =>
+            {
+                outputSink.SetResult(callInfo.Arg<string>());
+                return;
+            });
+
+            using (var transporter = new MessageTransport(inputSource, outputWriter))
+            {
+                await transporter.PublishEventAsync(new JObject(new JProperty("foo", "bar")));
+
+                string output = await outputSink.Task;
+
+                Assert.Equal(@"{""content_type"":""Event"",""body"":{""foo"":""bar""}}", output);
+            }
+        }
+
         [Fact]
         public async void ReceivedRequestInvokesRequestCallbackForRequest()
         {
@@ -114,6 +136,17 @@ namespace IronFoundry.Warden.Test.ContainerHost
         }
 
         [Fact]
+        public async void ReceviedEventInvokesEventCallback()
+        {
+            var tcs = new TaskCompletionSource<int>();
+            transporter.SubscribeEvent(r => { tcs.SetResult(0); return Task.FromResult(0); });
+
+            inputSource.AddLine(@"{""content_type"":""Event"",""body"":{""jsonrpc"":""2.0"",""id"":1,""result"":""foo-result""}}");
+
+            Assert.Same(tcs.Task, await Task.WhenAny(tcs.Task, Task.Delay(150)));
+        }
+
+        [Fact]
         public async void ReceivedResponseDoesNotInvokesRequestCallback()
         {
             var tcs = new TaskCompletionSource<int>();
@@ -123,6 +156,18 @@ namespace IronFoundry.Warden.Test.ContainerHost
 
             Assert.NotSame(tcs.Task, await Task.WhenAny(tcs.Task, Task.Delay(150)));
             Assert.False(tcs.Task.IsCompleted); 
+        }
+
+        [Fact]
+        public async void ReceivedResponseDoesNotInvokesEventCallback()
+        {
+            var tcs = new TaskCompletionSource<int>();
+            transporter.SubscribeEvent(r => { tcs.SetResult(0); return Task.FromResult(0); });
+
+            inputSource.AddLine(@"{""content_type"":""Response"",""body"":{""jsonrpc"":""2.0"",""id"":1,""result"":""foo-result""}}");
+
+            Assert.NotSame(tcs.Task, await Task.WhenAny(tcs.Task, Task.Delay(150)));
+            Assert.False(tcs.Task.IsCompleted);
         }
 
         [Fact]
@@ -142,6 +187,18 @@ namespace IronFoundry.Warden.Test.ContainerHost
         {
             var tcs = new TaskCompletionSource<int>();
             transporter.SubscribeResponse(r => { tcs.SetResult(0); return Task.FromResult(0); });
+
+            inputSource.AddLine(@"!@#$%&*()");
+
+            Assert.NotSame(tcs.Task, await Task.WhenAny(tcs.Task, Task.Delay(150)));
+            Assert.False(tcs.Task.IsCompleted);
+        }
+
+        [Fact]
+        public async void InvalidInputDoesNotInvokeError()
+        {
+            var tcs = new TaskCompletionSource<int>();
+            transporter.SubscribeEvent(r => { tcs.SetResult(0); return Task.FromResult(0); });
 
             inputSource.AddLine(@"!@#$%&*()");
 

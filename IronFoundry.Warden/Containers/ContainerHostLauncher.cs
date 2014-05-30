@@ -104,6 +104,11 @@ namespace IronFoundry.Warden.Containers
                     messagingClient.PublishResponse(message);
                     return Task.FromResult(0);
                 });
+
+                //messageTransport.SubscribeEvent( @event =>
+                //{
+                //    messagingClient.PublishEvent(@event);
+                //});
             }
         }
 

@@ -4,14 +4,17 @@ using System.Diagnostics;
 using System.IO;
 using System.Text;
 using System.Threading.Tasks;
+using IronFoundry.Warden.Containers.Messages;
 using IronFoundry.Warden.Shared.Messaging;
 using IronFoundry.Warden.Utilities;
+using logmessage;
 
 namespace IronFoundry.Warden.Containers
 {
     public interface IContainerHostLauncher
     {
         event EventHandler<int> HostStopped;
+        event EventHandler<LogEventArgs> LogEvent;
 
         int HostProcessId { get; }
         bool IsActive { get; }
@@ -34,6 +37,8 @@ namespace IronFoundry.Warden.Containers
         MessagingClient messagingClient;
 
         public event EventHandler<int> HostStopped;
+
+        public event EventHandler<LogEventArgs> LogEvent;
 
         public int HostProcessId
         {
@@ -99,16 +104,21 @@ namespace IronFoundry.Warden.Containers
                     await messageTransport.PublishRequestAsync(message);
                 });
 
+                messagingClient.SubscribeEvent<LogEvent>(
+                    Messages.LogEvent.EventTopicName, 
+                    e => OnLogEvent(new LogEventArgs() { Data = e.LogData, Type = e.MessageType }));
+
                 messageTransport.SubscribeResponse(message =>
                 {
                     messagingClient.PublishResponse(message);
                     return Task.FromResult(0);
                 });
 
-                //messageTransport.SubscribeEvent( @event =>
-                //{
-                //    messagingClient.PublishEvent(@event);
-                //});
+                messageTransport.SubscribeEvent( @event =>
+                {
+                    messagingClient.PublishEvent(@event);
+                    return Task.FromResult(0);
+                });
             }
         }
 
@@ -134,6 +144,15 @@ namespace IronFoundry.Warden.Containers
             if (handlers != null)
             {
                 handlers(this, exitCode);
+            }
+        }
+
+        protected virtual void OnLogEvent(LogEventArgs eventArgs)
+        {
+            var handlers = LogEvent;
+            if (handlers != null)
+            {
+                handlers(this, eventArgs);
             }
         }
 
@@ -188,5 +207,11 @@ namespace IronFoundry.Warden.Containers
 
             return Task.FromResult<object>(null);
         }
+    }
+
+    public class LogEventArgs : EventArgs
+    {
+        public LogMessage.MessageType Type { get; set; }
+        public string Data { get; set; }
     }
 }

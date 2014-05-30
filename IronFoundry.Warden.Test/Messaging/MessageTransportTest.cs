@@ -32,10 +32,7 @@ namespace IronFoundry.Warden.Test.ContainerHost
             var outputSink = new TaskCompletionSource<string>();
             var outputWriter = Substitute.For<TextWriter>();
             outputWriter.When(x => x.WriteLine(Arg.Any<string>())).Do(callInfo =>
-            {
-                outputSink.SetResult(callInfo.Arg<string>());
-                return;
-            });
+                outputSink.SetResult(callInfo.Arg<string>()));
 
             using (var transporter = new MessageTransport(inputSource, outputWriter))
             {
@@ -53,10 +50,7 @@ namespace IronFoundry.Warden.Test.ContainerHost
             var outputSink = new TaskCompletionSource<string>();
             var outputWriter = Substitute.For<TextWriter>();
             outputWriter.When(x => x.WriteLine(Arg.Any<string>())).Do(callInfo =>
-            {
-                outputSink.SetResult(callInfo.Arg<string>());
-                return;
-            });
+                outputSink.SetResult(callInfo.Arg<string>()));
 
             using (var transporter = new MessageTransport(inputSource, outputWriter))
             {
@@ -75,10 +69,7 @@ namespace IronFoundry.Warden.Test.ContainerHost
             var outputSink = new TaskCompletionSource<string>();
             var outputWriter = Substitute.For<TextWriter>();
             outputWriter.When(x => x.WriteLine(Arg.Any<string>())).Do(callInfo =>
-            {
-                outputSink.SetResult(callInfo.Arg<string>());
-                return;
-            });
+                outputSink.SetResult(callInfo.Arg<string>()));
 
             using (var transporter = new MessageTransport(inputSource, outputWriter))
             {

@@ -20,6 +20,15 @@ namespace IronFoundry.Warden.Shared.Messaging
         private volatile Task readTask;
         private readonly AsyncLock writeLock = new AsyncLock();
 
+        enum ContentType
+        {
+            Unknown,
+            Request,
+            Response,
+            Event,
+            Error
+        }
+
         public MessageTransport(TextReader reader, TextWriter writer)
         {
             this.reader = reader;
@@ -64,15 +73,47 @@ namespace IronFoundry.Warden.Shared.Messaging
                 return;
             }
 
-            if (IsRequestMessage(message))
-                await InvokeRequestCallbackAsync(message);
-            else
-                await InvokeResponseCallbackAsync(message);
+            ContentType contentType;
+            JToken body = null;
+
+            if (!TryUnwrap(message, out contentType, out body))
+                InvokeErrors(new InvalidOperationException("Received invalidly formatted message"));
+
+            switch (contentType)
+            {
+                case ContentType.Request:
+                    await InvokeRequestCallbackAsync((JObject)body);
+                    break;
+                case ContentType.Response:
+                    await InvokeResponseCallbackAsync((JObject)body);
+                    break;
+                default:
+                    InvokeErrors(new InvalidOperationException("Received currently unsupported content-type"));
+                    break;
+            }
         }
 
+        private bool TryUnwrap(JObject wrappedMessage, out ContentType contentType, out JToken body)
+        {
+            contentType = ContentType.Unknown;
+            body = null;
+
+            JToken contentTypeToken = null;
+            if (!wrappedMessage.TryGetValue("content_type", out contentTypeToken))
+                return false;
+
+            if (!Enum.TryParse<ContentType>(contentTypeToken.Value<string>(), out contentType))
+                return false;
+
+            if (!wrappedMessage.TryGetValue("body", out body))
+                return false;
+
+            return true;
+        }
+        
         private bool IsRequestMessage(JObject message)
         {
-            return (message["method"] != null);
+            return (message["content_type"].Value<string>() == "request");
         }
 
         private async Task InvokeRequestCallbackAsync(JObject message)
@@ -131,6 +172,18 @@ namespace IronFoundry.Warden.Shared.Messaging
             }
         }
 
+        public Task PublishRequestAsync(JObject message)
+        {
+            var request = WrapMessage(ContentType.Request, message);
+            return PublishAsync(request);
+        }
+
+        public Task PublishResponseAsync(JObject message)
+        {
+            var response = WrapMessage(ContentType.Response, message);
+            return PublishAsync(response);
+        }
+
         public void Start()
         {
             if (!tokenSource.IsCancellationRequested)
@@ -169,6 +222,14 @@ namespace IronFoundry.Warden.Shared.Messaging
             {
                 errorSubscribers.Add(callback);
             }
+        }
+
+        private static JObject WrapMessage(ContentType contentType, JObject body)
+        {
+            return new JObject(
+                new JProperty("content_type", contentType.ToString()),
+                new JProperty("body", body)
+                );
         }
     }
 }

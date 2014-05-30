@@ -27,7 +27,7 @@ namespace IronFoundry.Warden.Test.ContainerHost
         }
 
         [Fact]
-        public async void PublishSendsTextToWriter()
+        public async void PublishRequestSendsWrappedRequestToTextToWriter()
         {
             var outputSink = new TaskCompletionSource<string>();
             var outputWriter = Substitute.For<TextWriter>();
@@ -39,11 +39,32 @@ namespace IronFoundry.Warden.Test.ContainerHost
 
             using (var transporter = new MessageTransport(inputSource, outputWriter))
             {
-                await transporter.PublishAsync(new JObject(new JProperty("foo", "bar")));
+                await transporter.PublishRequestAsync(new JObject(new JProperty("foo", "bar")));
 
                 string output = await outputSink.Task;
 
-                Assert.Equal(@"{""foo"":""bar""}", output);
+                Assert.Equal(@"{""content_type"":""Request"",""body"":{""foo"":""bar""}}", output);
+            }
+        }
+
+        [Fact]
+        public async void PublishResponseSendsWrappedResponseToTextWriter()
+        {
+            var outputSink = new TaskCompletionSource<string>();
+            var outputWriter = Substitute.For<TextWriter>();
+            outputWriter.When(x => x.WriteLine(Arg.Any<string>())).Do(callInfo =>
+            {
+                outputSink.SetResult(callInfo.Arg<string>());
+                return;
+            });
+
+            using (var transporter = new MessageTransport(inputSource, outputWriter))
+            {
+                await transporter.PublishResponseAsync(new JObject(new JProperty("foo", "bar")));
+
+                string output = await outputSink.Task;
+
+                Assert.Equal(@"{""content_type"":""Response"",""body"":{""foo"":""bar""}}", output);
             }
         }
 
@@ -53,7 +74,7 @@ namespace IronFoundry.Warden.Test.ContainerHost
             var tcs = new TaskCompletionSource<int>();
             transporter.SubscribeRequest(r => { tcs.SetResult(0); return Task.FromResult(0); });
 
-            inputSource.AddLine(@"{""jsonrpc"":""2.0"",""id"":1,""method"":""foo""}");
+            inputSource.AddLine(@"{""content_type"":""Request"", ""body"":{""jsonrpc"":""2.0"",""id"":1,""method"":""foo""}}");
 
             Assert.Same(tcs.Task, await Task.WhenAny(tcs.Task, Task.Delay(1000)));
         }
@@ -64,7 +85,7 @@ namespace IronFoundry.Warden.Test.ContainerHost
             var tcs = new TaskCompletionSource<int>();
             transporter.SubscribeResponse(r => { tcs.SetResult(0); return Task.FromResult(0); });
 
-            inputSource.AddLine(@"{""jsonrpc"":""2.0"",""id"":1,""method"":""foo""}");
+            inputSource.AddLine(@"{""content_type"":""Request"",""body"":{""jsonrpc"":""2.0"",""id"":1,""method"":""foo""}}");
 
             Assert.NotSame(tcs.Task, await Task.WhenAny(tcs.Task, Task.Delay(150)));
             Assert.False(tcs.Task.IsCompleted); 
@@ -76,7 +97,7 @@ namespace IronFoundry.Warden.Test.ContainerHost
             var tcs = new TaskCompletionSource<int>();
             transporter.SubscribeResponse(r => { tcs.SetResult(0); return Task.FromResult(0); });
 
-            inputSource.AddLine(@"{""jsonrpc"":""2.0"",""id"":1,""result"":""foo-result""}");
+            inputSource.AddLine(@"{""content_type"":""Response"",""body"":{""jsonrpc"":""2.0"",""id"":1,""result"":""foo-result""}}");
 
             Assert.Same(tcs.Task, await Task.WhenAny(tcs.Task, Task.Delay(2000)));
         }
@@ -87,7 +108,7 @@ namespace IronFoundry.Warden.Test.ContainerHost
             var tcs = new TaskCompletionSource<int>();
             transporter.SubscribeResponse(r => { tcs.SetResult(0); return Task.FromResult(0); });
 
-            inputSource.AddLine(@"{""jsonrpc"":""2.0"",""id"":1,""error"":{""code"":1,""message"":""foo-error""}}");
+            inputSource.AddLine(@"{""content_type"":""Response"",""body"":{""jsonrpc"":""2.0"",""id"":1,""error"":{""code"":1,""message"":""foo-error""}}}");
 
             Assert.Same(tcs.Task, await Task.WhenAny(tcs.Task, Task.Delay(2000)));
         }
@@ -98,7 +119,7 @@ namespace IronFoundry.Warden.Test.ContainerHost
             var tcs = new TaskCompletionSource<int>();
             transporter.SubscribeRequest(r => { tcs.SetResult(0); return Task.FromResult(0); });
 
-            inputSource.AddLine(@"{""jsonrpc"":""2.0"",""id"":1,""result"":""foo-result""}");
+            inputSource.AddLine(@"{""content_type"":""Response"",""body"":{""jsonrpc"":""2.0"",""id"":1,""result"":""foo-result""}}");
 
             Assert.NotSame(tcs.Task, await Task.WhenAny(tcs.Task, Task.Delay(150)));
             Assert.False(tcs.Task.IsCompleted); 
@@ -148,7 +169,7 @@ namespace IronFoundry.Warden.Test.ContainerHost
             inputSource.AddLine(null);
             transporter.Stop();
 
-            inputSource.AddLine(@"{""jsonrpc"":""2.0"",""id"":1,""result"":""foo-result""}");
+            inputSource.AddLine(@"{""content_type"":""Response"",""body"":{""jsonrpc"":""2.0"",""id"":1,""result"":""foo-result""}}");
 
             Assert.NotSame(tcs.Task, await Task.WhenAny(tcs.Task, Task.Delay(150)));
             Assert.False(tcs.Task.IsCompleted);
@@ -164,7 +185,7 @@ namespace IronFoundry.Warden.Test.ContainerHost
             transporter.Stop();
             transporter.Start();
 
-            inputSource.AddLine(@"{""jsonrpc"":""2.0"",""id"":1,""result"":""foo-result""}");
+            inputSource.AddLine(@"{""content_type"":""Response"",""body"":{""jsonrpc"":""2.0"",""id"":1,""result"":""foo-result""}}");
 
             Assert.Same(tcs.Task, await Task.WhenAny(tcs.Task, Task.Delay(1000)));
         }
